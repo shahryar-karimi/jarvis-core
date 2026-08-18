@@ -1,65 +1,102 @@
-# JARVIS Core — Refactor V1
+# JARVIS Core
 
-This is the new cloud-side JARVIS brain extracted from the Mark-L project.
+JARVIS Core is the primary backend and orchestration service for JARVIS. It
+provides the cloud-side AI, memory, prompt construction, and HTTP interfaces
+used by JARVIS clients and device agents.
 
-## What moved into the Core
+## Capabilities
 
 - Provider-neutral AI contracts
-- Gemini provider adapter
-- Prompt/context building
-- Long-term memory domain + PostgreSQL repository
-- FastAPI HTTP API
+- Gemini AI provider integration
+- Prompt and runtime-context construction
+- Long-term memory backed by PostgreSQL
+- FastAPI endpoints for chat, health, and memory management
 - Environment-based configuration
-- Legacy JSON memory import utility
+- Unit, API, database-integration, and live-provider tests
 
-## What intentionally did NOT move
+## Architectural scope
 
-The following belong in the future `jarvis-agent` because they control a physical device:
+JARVIS Core owns reasoning, orchestration, persistence, and network APIs.
+Device-specific capabilities such as microphones, speakers, cameras, desktop
+automation, local files, and operating-system control belong in separate agent
+applications that communicate with the Core through explicit APIs.
 
-- PyQt UI
-- microphone/speaker streams
-- `open_app`
-- screen/camera capture
-- computer settings/control
-- local filesystem operations
-- desktop/browser automation
-- local Git/process/system monitoring
+## Project structure
 
-Web/Google/GitHub/task services will be added to JARVIS Core in later V1 milestones.
+```text
+app/
+  api/              FastAPI routes, schemas, and dependency wiring
+  application/      Provider-independent use cases and prompt construction
+  core/             Application configuration
+  domain/           AI and memory contracts
+  infrastructure/   Database repositories and AI provider adapters
+  prompts/          System prompt resources
+scripts/            Operational utilities
+tests/              Unit, API, integration, and live smoke tests
+```
+
+The dependency direction is inward: `domain` and `application` define the
+business behavior, while `api` and `infrastructure` provide external adapters.
+
+## Requirements
+
+- Python 3.12 or newer
+- Docker with Docker Compose for the local PostgreSQL service
+- A Gemini API key when Gemini or the live AI test is enabled
 
 ## Run locally
 
-1. Copy environment configuration:
+1. Create the local environment file:
 
-   ```bash
-   cp .env.example .env
+   ```powershell
+   Copy-Item .env.example .env
    ```
 
-2. Put your Gemini API key in `.env`. Do **not** copy `config/api_keys.json` from Mark-L.
+   On macOS or Linux, use `cp .env.example .env`.
+
+2. Configure `JARVIS_GEMINI_API_KEY` in `.env` and review the other settings.
+   The local `.env` is ignored by Git and must not be committed.
 
 3. Start PostgreSQL:
 
-   ```bash
+   ```powershell
    docker compose up -d postgres
    ```
 
 4. Create a virtual environment and install the project:
 
-   ```bash
+   ```powershell
    python -m venv .venv
-   source .venv/bin/activate     # Windows: .venv\\Scripts\\activate
-   pip install -e ".[dev]"
+   .\.venv\Scripts\Activate.ps1
+   python -m pip install -e ".[dev]"
    ```
+
+   On macOS or Linux, activate it with `source .venv/bin/activate`.
 
 5. Start the API:
 
-   ```bash
-   uvicorn app.main:app --reload
+   ```powershell
+   python -m uvicorn app.main:app --reload
    ```
 
-6. Open `http://localhost:8000/docs`.
+6. Open `http://localhost:8000/docs` for the interactive API documentation.
 
-## First endpoints
+## Configuration
+
+Important `.env` settings include:
+
+- `JARVIS_ENVIRONMENT`
+- `JARVIS_DATABASE_URL`
+- `JARVIS_AI_PROVIDER`
+- `JARVIS_GEMINI_API_KEY`
+- `JARVIS_GEMINI_MODEL`
+- `JARVIS_CORS_ORIGINS`
+- `RUN_DB_TESTS`
+- `RUN_LIVE_AI_TESTS`
+
+Use [.env.example](.env.example) as the configuration template.
+
+## API endpoints
 
 - `GET /api/v1/health`
 - `POST /api/v1/chat`
@@ -67,16 +104,51 @@ Web/Google/GitHub/task services will be added to JARVIS Core in later V1 milesto
 - `PUT /api/v1/memories`
 - `DELETE /api/v1/memories/{category}/{key}`
 
-## Import old Mark-L memory
+## Tests
 
-After PostgreSQL is running:
+The local `.env` controls whether the PostgreSQL and Gemini checks run:
 
-```bash
-python scripts/import_legacy_memory.py ../Mark-L-main/memory/long_term.json
+```dotenv
+RUN_DB_TESTS=1
+RUN_LIVE_AI_TESTS=1
 ```
 
-The importer copies memory values, not API keys or UI/device configuration.
+With both enabled, the normal command runs the entire suite. The Gemini test
+makes a real request and may consume quota:
 
-## Architecture rule
+```powershell
+python -m pytest -v
+```
 
-`application` and `domain` code must not import Gemini, SQLAlchemy, FastAPI, PyQt, Windows APIs, or other vendor/platform SDKs. Those dependencies live in `infrastructure` or `api` adapters.
+The live check is intentionally strict: invalid credentials, an unavailable
+model, or a provider region restriction fails the test instead of silently
+skipping it.
+
+Run only the safe offline suite without contacting PostgreSQL or Gemini:
+
+```powershell
+python -m pytest -m "not integration and not live" -v
+```
+
+Run either external test separately:
+
+```powershell
+python -m pytest -m integration tests/test_database_integration.py -v
+python -m pytest -m live tests/test_gemini_smoke.py -v
+```
+
+## Architecture boundaries
+
+Code in `app/domain` and `app/application` must not import FastAPI,
+SQLAlchemy, Gemini SDKs, operating-system APIs, or other vendor/platform
+libraries. Those dependencies belong in `app/api` or `app/infrastructure`.
+
+## Planned capabilities
+
+- Device registration and real-time connections
+- Tool execution with explicit permissions
+- Tasks, reminders, and notifications
+- Conversation persistence and summarization
+- Additional AI providers
+- Calendar, GitHub, and other service integrations
+- Retrieval-augmented generation and vector search

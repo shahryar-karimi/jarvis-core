@@ -31,3 +31,7 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "integration: requires the configured PostgreSQL database",
+  "live: calls a real external AI provider and may consume quota",
+]

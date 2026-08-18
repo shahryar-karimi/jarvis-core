@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     ai_provider: str = "gemini"
     gemini_api_key: str | None = Field(default=None, repr=False)
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.6-flash"
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
