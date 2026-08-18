@@ -25,7 +25,6 @@ async def test_repository_round_trip_against_migrated_schema(tmp_path: Path) -> 
     try:
         async with database.session_factory() as session:
             repository = SqlAlchemyMemoryRepository(session)
-
             created = await repository.upsert(
                 MemoryCategory.PREFERENCES,
                 "favorite_editor",
@@ -42,6 +41,8 @@ async def test_repository_round_trip_against_migrated_schema(tmp_path: Path) -> 
                 "This key is isolated by category.",
             )
 
+        async with database.session_factory() as session:
+            repository = SqlAlchemyMemoryRepository(session)
             entries = await repository.list_all()
             assert created.key == "favorite_editor"
             assert updated.value == "PyCharm"
@@ -64,6 +65,9 @@ async def test_repository_round_trip_against_migrated_schema(tmp_path: Path) -> 
                 MemoryCategory.PREFERENCES,
                 "favorite_editor",
             ) is True
+
+        async with database.session_factory() as session:
+            repository = SqlAlchemyMemoryRepository(session)
             assert await repository.delete(
                 MemoryCategory.PREFERENCES,
                 "favorite_editor",

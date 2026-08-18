@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 @pytest.mark.asyncio
 async def test_import_data_normalizes_supported_memory_shapes(
     fake_memory_repository,
+    memory_service,
 ) -> None:
     imported = await import_data(
         {
@@ -32,7 +33,7 @@ async def test_import_data_normalizes_supported_memory_shapes(
             "notes": ["not a key/value object"],
             "unknown_category": {"ignored": "value"},
         },
-        fake_memory_repository,
+        memory_service,
     )
 
     assert imported == 3

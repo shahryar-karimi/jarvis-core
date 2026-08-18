@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.application.assistant_service import AssistantService
+from app.application.memory_service import MemoryService
 from app.application.prompt_builder import PromptBuilder
 from app.core.config import Settings
 from app.domain.ai import AICapability, AIProvider, AIRequest, AIResponse
@@ -46,7 +47,7 @@ async def test_assistant_service_is_provider_independent(tmp_path: Path) -> None
     settings = Settings(_env_file=None, database_url="sqlite+aiosqlite:///:memory:")
     service = AssistantService(
         provider=FakeProvider(),
-        memory_repository=FakeMemoryRepository(),
+        memory_service=MemoryService(FakeMemoryRepository()),
         prompt_builder=PromptBuilder(settings, prompt),
     )
 

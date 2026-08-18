@@ -10,9 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.api.dependencies import (
     get_ai_provider,
-    get_memory_repository,
+    get_memory_service,
     get_prompt_builder,
 )
+from app.application.memory_service import MemoryService
 from app.application.prompt_builder import PromptBuilder
 from app.core.config import Settings
 from app.domain.ai import AICapability, AIProvider, AIRequest, AIResponse
@@ -112,11 +113,18 @@ def fake_memory_repository() -> FakeMemoryRepository:
 
 
 @pytest.fixture
+def memory_service(
+    fake_memory_repository: FakeMemoryRepository,
+) -> MemoryService:
+    return MemoryService(fake_memory_repository)
+
+
+@pytest.fixture
 def app(
     tmp_path: Path,
     test_settings: Settings,
     fake_provider: FakeAIProvider,
-    fake_memory_repository: FakeMemoryRepository,
+    memory_service: MemoryService,
 ) -> Iterator[FastAPI]:
     base_prompt = tmp_path / "base_system.txt"
     base_prompt.write_text(
@@ -127,9 +135,7 @@ def app(
 
     application = create_app(test_settings)
     application.dependency_overrides[get_ai_provider] = lambda: fake_provider
-    application.dependency_overrides[get_memory_repository] = (
-        lambda: fake_memory_repository
-    )
+    application.dependency_overrides[get_memory_service] = lambda: memory_service
     application.dependency_overrides[get_prompt_builder] = lambda: prompt_builder
 
     yield application

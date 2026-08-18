@@ -11,15 +11,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from app.application.memory_service import MemoryService
 from app.core.config import get_settings
-from app.domain.memory import MemoryCategory, MemoryRepository
+from app.domain.memory import MemoryCategory
 from app.infrastructure.database import Database
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
 
 async def import_data(
     data: dict[str, Any],
-    repository: MemoryRepository,
+    service: MemoryService,
 ) -> int:
     imported = 0
     for category in MemoryCategory:
@@ -33,7 +34,7 @@ async def import_data(
                 value = raw
             if value is None or not str(value).strip():
                 continue
-            await repository.upsert(category, str(key), str(value))
+            await service.upsert_memory(category, str(key), str(value))
             imported += 1
     return imported
 
@@ -51,7 +52,7 @@ async def import_file(
     try:
         async with database.session_factory() as session:
             repository = SqlAlchemyMemoryRepository(session)
-            return await import_data(data, repository)
+            return await import_data(data, MemoryService(repository))
     finally:
         await database.dispose()
 

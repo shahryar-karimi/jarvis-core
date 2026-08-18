@@ -95,6 +95,8 @@ business behavior, while `api` and `infrastructure` provide external adapters.
 then the FastAPI lifespan creates one database engine, AI provider client, and
 prompt builder for that application instance. Request dependencies borrow those
 shared resources, while shutdown closes the provider and database reliably.
+Memory and chat routes call application services and domain contracts; only the
+dependency-composition layer constructs SQLAlchemy adapters.
 
 Application startup does not create or alter tables. Schema changes are explicit,
 versioned Alembic migrations that must run before the corresponding application
@@ -171,6 +173,9 @@ Use [.env.example](.env.example) as the configuration template.
 - `GET /api/v1/memories`
 - `PUT /api/v1/memories`
 - `DELETE /api/v1/memories/{category}/{key}`
+
+Deleting an existing memory returns `204 No Content`; deleting a missing memory
+returns `404 Not Found`.
 
 ## Tests
 

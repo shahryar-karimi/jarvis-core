@@ -5,7 +5,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.exception_handlers import memory_not_found_handler
 from app.api.router import api_router
+from app.application.memory_service import MemoryNotFoundError
 from app.application.prompt_builder import PromptBuilder
 from app.core.config import Settings, get_settings
 from app.domain.ai import AIProvider
@@ -63,6 +65,10 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.add_exception_handler(
+        MemoryNotFoundError,
+        memory_not_found_handler,
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,

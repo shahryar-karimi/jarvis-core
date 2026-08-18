@@ -5,9 +5,11 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assistant_service import AssistantService
+from app.application.memory_service import MemoryService
 from app.application.prompt_builder import PromptBuilder
 from app.core.config import Settings
 from app.domain.ai import AIProvider
+from app.domain.memory import MemoryRepository
 from app.infrastructure.database import Database
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
@@ -45,8 +47,14 @@ def get_ai_provider(request: Request) -> AIProvider:
     return cast(AIProvider, _app_resource(request, "ai_provider"))
 
 
-def get_memory_repository(session: SessionDep) -> SqlAlchemyMemoryRepository:
+def get_memory_repository(session: SessionDep) -> MemoryRepository:
     return SqlAlchemyMemoryRepository(session)
+
+
+def get_memory_service(
+    repository: Annotated[MemoryRepository, Depends(get_memory_repository)],
+) -> MemoryService:
+    return MemoryService(repository)
 
 
 def get_prompt_builder(request: Request) -> PromptBuilder:
@@ -55,7 +63,7 @@ def get_prompt_builder(request: Request) -> PromptBuilder:
 
 def get_assistant_service(
     provider: Annotated[AIProvider, Depends(get_ai_provider)],
-    repository: Annotated[SqlAlchemyMemoryRepository, Depends(get_memory_repository)],
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
     prompt_builder: Annotated[PromptBuilder, Depends(get_prompt_builder)],
 ) -> AssistantService:
-    return AssistantService(provider, repository, prompt_builder)
+    return AssistantService(provider, memory_service, prompt_builder)
