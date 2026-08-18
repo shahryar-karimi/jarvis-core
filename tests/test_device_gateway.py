@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import json
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -8,9 +9,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from starlette.testclient import WebSocketDenialResponse
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import Settings
+from app.infrastructure.hive import create_in_memory_hive_resources
 from app.main import create_app
 
 
@@ -49,6 +52,7 @@ def gateway_app(test_settings: Settings) -> FastAPI:
         settings,
         database_factory=lambda _: FakeDatabase(),
         ai_provider_factory=lambda _: FakeAIProvider(),
+        hive_factory=create_in_memory_hive_resources,
     )
 
 
@@ -66,6 +70,7 @@ def short_timeout_gateway_app(test_settings: Settings) -> FastAPI:
         settings,
         database_factory=lambda _: FakeDatabase(),
         ai_provider_factory=lambda _: FakeAIProvider(),
+        hive_factory=create_in_memory_hive_resources,
     )
 
 
@@ -83,6 +88,7 @@ def fast_heartbeat_gateway_app(test_settings: Settings) -> FastAPI:
         settings,
         database_factory=lambda _: FakeDatabase(),
         ai_provider_factory=lambda _: FakeAIProvider(),
+        hive_factory=create_in_memory_hive_resources,
     )
 
 
@@ -254,25 +260,32 @@ def test_gateway_rejects_missing_and_tampered_authentication(
     gateway_app: FastAPI,
 ) -> None:
     with TestClient(gateway_app) as client:
-        with pytest.raises(WebSocketDisconnect) as missing:
+        with pytest.raises(WebSocketDenialResponse) as missing:
             with client.websocket_connect(
                 "/api/v1/devices/ws",
                 subprotocols=[DEVICE_PROTOCOL],
             ):
                 pytest.fail("gateway accepted a WebSocket without a credential")
-        assert missing.value.code == 4403
-        assert missing.value.reason == "Authentication failed"
+        assert missing.value.status_code == 403
 
         _, token = pair_device(client)
-        with pytest.raises(WebSocketDisconnect) as tampered:
+        with pytest.raises(WebSocketDenialResponse) as query_token:
+            with client.websocket_connect(
+                f"/api/v1/devices/ws?token={token}",
+                subprotocols=[DEVICE_PROTOCOL],
+            ):
+                pytest.fail("gateway accepted a credential from the URL")
+        assert query_token.value.status_code == 403
+
+        with pytest.raises(WebSocketDenialResponse) as tampered:
             with client.websocket_connect(
                 "/api/v1/devices/ws",
                 headers={"authorization": f"Bearer {token}tampered"},
                 subprotocols=[DEVICE_PROTOCOL],
             ):
                 pytest.fail("gateway accepted a tampered device credential")
-        assert tampered.value.code == 4403
-        assert token not in tampered.value.reason
+        assert tampered.value.status_code == 403
+        assert token not in tampered.value.text
 
 
 def test_gateway_requires_the_versioned_device_subprotocol(
@@ -281,7 +294,7 @@ def test_gateway_requires_the_versioned_device_subprotocol(
     with TestClient(gateway_app) as client:
         _, token = pair_device(client)
 
-        with pytest.raises(WebSocketDisconnect) as rejected:
+        with pytest.raises(WebSocketDenialResponse) as rejected:
             with client.websocket_connect(
                 "/api/v1/devices/ws",
                 headers={"authorization": f"Bearer {token}"},
@@ -289,8 +302,115 @@ def test_gateway_requires_the_versioned_device_subprotocol(
             ):
                 pytest.fail("gateway accepted an unsupported subprotocol")
 
-        assert rejected.value.code == 4406
-        assert rejected.value.reason == "Protocol version required"
+        assert rejected.value.status_code == 403
+
+
+def test_gateway_requires_device_hello_as_the_first_message(
+    gateway_app: FastAPI,
+) -> None:
+    with TestClient(gateway_app) as client:
+        _, token = pair_device(client)
+        with client.websocket_connect(
+            "/api/v1/devices/ws",
+            headers={"authorization": f"Bearer {token}"},
+            subprotocols=[DEVICE_PROTOCOL],
+        ) as websocket:
+            server_hello = websocket.receive_json()
+            websocket.send_json(
+                {
+                    "v": 1,
+                    "type": "capabilities.update",
+                    "message_id": str(uuid4()),
+                    "session_id": server_hello["session_id"],
+                    "payload": {"capabilities": ["open_app"]},
+                }
+            )
+
+            assert websocket.receive_json()["type"] == "protocol.error"
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == 4400
+
+
+@pytest.mark.parametrize("violation", ["replay", "wrong_session"])
+def test_gateway_rejects_replays_and_wrong_sessions(
+    gateway_app: FastAPI,
+    violation: str,
+) -> None:
+    with TestClient(gateway_app) as client:
+        _, token = pair_device(client)
+        with client.websocket_connect(
+            "/api/v1/devices/ws",
+            headers={"authorization": f"Bearer {token}"},
+            subprotocols=[DEVICE_PROTOCOL],
+        ) as websocket:
+            server_hello = websocket.receive_json()
+            hello = hello_message(server_hello["session_id"], ["open_app"])
+            websocket.send_json(hello)
+            assert websocket.receive_json()["type"] == "server.ready"
+
+            websocket.send_json(
+                {
+                    "v": 1,
+                    "type": "capabilities.update",
+                    "message_id": (
+                        hello["message_id"]
+                        if violation == "replay"
+                        else str(uuid4())
+                    ),
+                    "session_id": (
+                        str(uuid4())
+                        if violation == "wrong_session"
+                        else server_hello["session_id"]
+                    ),
+                    "payload": {"capabilities": ["open_app"]},
+                }
+            )
+
+            assert websocket.receive_json()["type"] == "protocol.error"
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == 4400
+
+
+@pytest.mark.parametrize(
+    ("frame", "expected_code"),
+    [
+        (b"{}", 1003),
+        (
+            json.dumps(
+                {
+                    "v": 1,
+                    "type": "device.hello",
+                    "padding": "x" * 66_000,
+                }
+            ),
+            1009,
+        ),
+    ],
+    ids=["binary", "oversized"],
+)
+def test_gateway_rejects_binary_and_oversized_frames(
+    gateway_app: FastAPI,
+    frame: bytes | str,
+    expected_code: int,
+) -> None:
+    with TestClient(gateway_app) as client:
+        _, token = pair_device(client)
+        with client.websocket_connect(
+            "/api/v1/devices/ws",
+            headers={"authorization": f"Bearer {token}"},
+            subprotocols=[DEVICE_PROTOCOL],
+        ) as websocket:
+            websocket.receive_json()
+            if isinstance(frame, bytes):
+                websocket.send_bytes(frame)
+            else:
+                websocket.send_text(frame)
+
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == expected_code
 
 
 def test_operator_routes_require_admin_and_revocation_blocks_reconnect(
@@ -332,14 +452,14 @@ def test_operator_routes_require_admin_and_revocation_blocks_reconnect(
         assert revoked.status_code == 200
         assert revoked.json()["status"] == "revoked"
 
-        with pytest.raises(WebSocketDisconnect) as rejected:
+        with pytest.raises(WebSocketDenialResponse) as rejected:
             with client.websocket_connect(
                 "/api/v1/devices/ws",
                 headers={"authorization": f"Bearer {token}"},
                 subprotocols=[DEVICE_PROTOCOL],
             ):
                 pytest.fail("gateway accepted a revoked device credential")
-        assert rejected.value.code == 4403
+        assert rejected.value.status_code == 403
 
 
 def test_blank_device_name_is_rejected_without_consuming_pairing(
@@ -510,3 +630,42 @@ def test_gateway_heartbeat_updates_presence(
             ).json()["last_seen_at"]
 
             assert after > before
+
+
+@pytest.mark.parametrize(
+    ("send_wrong_nonce", "expected_code"),
+    [(True, 4400), (False, 4408)],
+)
+def test_gateway_rejects_bad_or_missing_heartbeat_pongs(
+    fast_heartbeat_gateway_app: FastAPI,
+    send_wrong_nonce: bool,
+    expected_code: int,
+) -> None:
+    with TestClient(fast_heartbeat_gateway_app) as client:
+        _, token = pair_device(client)
+        with client.websocket_connect(
+            "/api/v1/devices/ws",
+            headers={"authorization": f"Bearer {token}"},
+            subprotocols=[DEVICE_PROTOCOL],
+        ) as websocket:
+            server_hello = websocket.receive_json()
+            session_id = server_hello["session_id"]
+            websocket.send_json(hello_message(session_id, ["open_app"]))
+            assert websocket.receive_json()["type"] == "server.ready"
+            assert websocket.receive_json()["type"] == "heartbeat.ping"
+
+            if send_wrong_nonce:
+                websocket.send_json(
+                    {
+                        "v": 1,
+                        "type": "heartbeat.pong",
+                        "message_id": str(uuid4()),
+                        "session_id": session_id,
+                        "payload": {"nonce": str(uuid4())},
+                    }
+                )
+                assert websocket.receive_json()["type"] == "protocol.error"
+
+            with pytest.raises(WebSocketDisconnect) as closed:
+                websocket.receive_json()
+            assert closed.value.code == expected_code

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.exception_handlers import device_error_handler, memory_not_found_handler
 from app.api.router import api_router
@@ -19,7 +20,10 @@ from app.infrastructure.hive import HiveResources, create_hive_resources
 
 DatabaseFactory = Callable[[str], Database]
 AIProviderFactory = Callable[[Settings], AIProvider]
-HiveFactory = Callable[[Settings], HiveResources]
+HiveFactory = Callable[
+    [Settings, async_sessionmaker[AsyncSession]],
+    HiveResources,
+]
 
 
 def create_app(
@@ -46,7 +50,7 @@ def create_app(
                 resolved_settings,
                 prompt_path,
             )
-            hive = hive_factory(resolved_settings)
+            hive = hive_factory(resolved_settings, database.session_factory)
             application.state.hive = hive
             yield
         finally:

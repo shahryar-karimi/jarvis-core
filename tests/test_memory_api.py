@@ -5,11 +5,12 @@ from app.api.dependencies import get_memory_service
 
 
 @pytest.mark.asyncio
-async def test_memory_crud_round_trip(app) -> None:
+async def test_memory_crud_round_trip(app, owner_headers) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         create_response = await client.put(
             "/api/v1/memories",
+            headers=owner_headers,
             json={
                 "category": "preferences",
                 "key": "favorite_editor",
@@ -23,13 +24,17 @@ async def test_memory_crud_round_trip(app) -> None:
         assert created["value"] == "VS Code"
         assert created["updated_at"]
 
-        list_response = await client.get("/api/v1/memories")
+        list_response = await client.get(
+            "/api/v1/memories",
+            headers=owner_headers,
+        )
         assert list_response.status_code == 200
         assert len(list_response.json()) == 1
         assert list_response.json()[0]["value"] == "VS Code"
 
         update_response = await client.put(
             "/api/v1/memories",
+            headers=owner_headers,
             json={
                 "category": "preferences",
                 "key": "favorite_editor",
@@ -40,21 +45,29 @@ async def test_memory_crud_round_trip(app) -> None:
         assert update_response.json()["value"] == "PyCharm"
 
         delete_response = await client.delete(
-            "/api/v1/memories/preferences/favorite_editor"
+            "/api/v1/memories/preferences/favorite_editor",
+            headers=owner_headers,
         )
         assert delete_response.status_code == 204
 
-        final_response = await client.get("/api/v1/memories")
+        final_response = await client.get(
+            "/api/v1/memories",
+            headers=owner_headers,
+        )
         assert final_response.status_code == 200
         assert final_response.json() == []
 
 
 @pytest.mark.asyncio
-async def test_memory_key_validation_rejects_unsafe_key(app) -> None:
+async def test_memory_key_validation_rejects_unsafe_key(
+    app,
+    owner_headers,
+) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.put(
             "/api/v1/memories",
+            headers=owner_headers,
             json={
                 "category": "preferences",
                 "key": "this key has spaces",
@@ -66,11 +79,15 @@ async def test_memory_key_validation_rejects_unsafe_key(app) -> None:
 
 
 @pytest.mark.asyncio
-async def test_deleting_a_missing_memory_returns_not_found(app) -> None:
+async def test_deleting_a_missing_memory_returns_not_found(
+    app,
+    owner_headers,
+) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.delete(
-            "/api/v1/memories/preferences/missing_key"
+            "/api/v1/memories/preferences/missing_key",
+            headers=owner_headers,
         )
 
     assert response.status_code == 404
@@ -80,7 +97,10 @@ async def test_deleting_a_missing_memory_returns_not_found(app) -> None:
 
 
 @pytest.mark.asyncio
-async def test_unexpected_memory_error_is_not_exposed(app) -> None:
+async def test_unexpected_memory_error_is_not_exposed(
+    app,
+    owner_headers,
+) -> None:
     internal_detail = "database password should stay private"
 
     class FailingMemoryService:
@@ -90,7 +110,10 @@ async def test_unexpected_memory_error_is_not_exposed(app) -> None:
     app.dependency_overrides[get_memory_service] = FailingMemoryService
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/v1/memories")
+        response = await client.get(
+            "/api/v1/memories",
+            headers=owner_headers,
+        )
 
     assert response.status_code == 500
     assert internal_detail not in response.text

@@ -7,12 +7,14 @@ async def test_chat_uses_memory_and_provider(
     app,
     fake_provider,
     fake_memory_repository,
+    owner_headers,
 ) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Seed memory through the public API so the test covers the actual route.
         memory_response = await client.put(
             "/api/v1/memories",
+            headers=owner_headers,
             json={
                 "category": "preferences",
                 "key": "favorite_editor",
@@ -23,6 +25,7 @@ async def test_chat_uses_memory_and_provider(
 
         response = await client.post(
             "/api/v1/chat",
+            headers=owner_headers,
             json={"message": "Which editor do I prefer?"},
         )
 
@@ -41,9 +44,13 @@ async def test_chat_uses_memory_and_provider(
 
 
 @pytest.mark.asyncio
-async def test_chat_rejects_empty_message(app) -> None:
+async def test_chat_rejects_empty_message(app, owner_headers) -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/chat", json={"message": ""})
+        response = await client.post(
+            "/api/v1/chat",
+            headers=owner_headers,
+            json={"message": ""},
+        )
 
     assert response.status_code == 422

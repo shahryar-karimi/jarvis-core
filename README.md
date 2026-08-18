@@ -31,7 +31,7 @@ app/
   application/      Provider-independent use cases and orchestration
   core/             Application configuration
   domain/           AI, memory, device, and security contracts
-  infrastructure/   Database, provider, and in-memory gateway adapters
+  infrastructure/   Database, provider, persistence, and live-routing adapters
   prompts/          System prompt resources
 migrations/         Alembic environment and versioned schema changes
 scripts/            Operational utilities
@@ -58,8 +58,11 @@ business behavior, while `api` and `infrastructure` provide external adapters.
 
    On macOS or Linux, use `cp .env.example .env`.
 
-2. Configure `JARVIS_GEMINI_API_KEY` in `.env` and review the other settings.
-   The local `.env` is ignored by Git and must not be committed.
+2. Configure `JARVIS_GEMINI_API_KEY`, `JARVIS_OWNER_TOKEN`,
+   `JARVIS_DEVICE_ADMIN_TOKEN`, and
+   `JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY` in `.env`. Generate a different random
+   value for each secret as shown in [.env.example](.env.example). The local
+   `.env` is ignored by Git and must not be committed.
 
 3. Start PostgreSQL:
 
@@ -104,7 +107,8 @@ dependency-composition layer constructs SQLAlchemy adapters.
 
 Application startup does not create or alter tables. Schema changes are explicit,
 versioned Alembic migrations that must run before the corresponding application
-version is started.
+version is started. Revision `0002_persist_devices` adds the `devices` and
+`device_credentials` tables; raw device bearer tokens are never columns.
 
 ## Database migrations
 
@@ -132,6 +136,7 @@ baseline without recreating the table:
 
 ```powershell
 python -m alembic stamp 0001_create_memories
+python -m alembic upgrade head
 python -m alembic current --check-heads
 ```
 
@@ -143,6 +148,8 @@ existing database:
 
 ```powershell
 python scripts/adopt_alembic_baseline.py
+python -m alembic upgrade head
+python -m alembic current --check-heads
 ```
 
 ## Operational utilities
@@ -165,7 +172,9 @@ Important `.env` settings include:
 - `JARVIS_GEMINI_API_KEY`
 - `JARVIS_GEMINI_MODEL`
 - `JARVIS_CORS_ORIGINS`
+- `JARVIS_OWNER_TOKEN`
 - `JARVIS_DEVICE_ADMIN_TOKEN`
+- `JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY`
 - `JARVIS_DEVICE_PAIRING_TTL_SECONDS`
 - `JARVIS_DEVICE_HEARTBEAT_INTERVAL_SECONDS`
 - `JARVIS_DEVICE_COMMAND_TIMEOUT_SECONDS`
@@ -194,6 +203,26 @@ Use [.env.example](.env.example) as the configuration template.
 Deleting an existing memory returns `204 No Content`; deleting a missing memory
 returns `404 Not Found`.
 
+Chat and memory endpoints require a random owner token of at least 32
+characters in `JARVIS_OWNER_TOKEN`:
+
+```http
+Authorization: Bearer <owner-token>
+```
+
+Generate one with:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Keep it separate from `JARVIS_DEVICE_ADMIN_TOKEN`: the owner token authorizes
+private assistant data, while the device-admin token authorizes pairing,
+revocation, and command dispatch. `GET /api/v1/health` remains public. Device
+pairing claims use their one-time pairing secret, and Agent WebSockets use their
+own device credential. Use HTTPS outside local development so bearer
+credentials are encrypted in transit.
+
 ## Device gateway
 
 The first Hive path is now executable end to end:
@@ -209,6 +238,9 @@ capability grants. The Agent claims it once through
 receives an opaque `jv1` device credential. Pairing secrets and device
 credentials are displayed only in those responses, use `Cache-Control:
 no-store`, and are retained by Core only as keyed HMAC-SHA256 digests.
+Device registrations and credential digests are persisted in PostgreSQL. The
+short-lived, unclaimed pairing challenges remain process-local and disappear
+on restart.
 
 Operator endpoints require this header, backed by a random token of at least 32
 characters in `JARVIS_DEVICE_ADMIN_TOKEN`:
@@ -226,6 +258,10 @@ operator's grants, then replies with `server.ready`. Commands and results use
 strict, versioned JSON envelopes and are correlated by device, session, and
 command IDs. Frames are text-only and capped at 64 KiB by default.
 
+The frozen message shapes, state machine, close codes, and compatibility rules
+are specified in the normative
+[`jarvis-device.v1` protocol contract](docs/protocols/jarvis-device-v1.md).
+
 Use HTTPS/WSS outside local development, and store the Agent credential in an
 OS keychain or an ACL-restricted file. Capability grants are necessary but not
 sufficient: the Agent must independently enforce app, path, and action
@@ -233,10 +269,15 @@ allowlists. Core never sends raw shell code. The initial capability/action
 registry permits `open_app.open`, `files.{list,read,write}`, and
 `system.{get_info,get_status}`.
 
-Device registration, credentials, and presence are process-local in this
-milestone, so they reset when Core restarts. Run a single Core worker until a
-persistent registry and shared message broker replace these adapters; multiple
-workers cannot safely route a command to a process-local WebSocket.
+Keep `JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY` stable and private: changing it
+invalidates every issued device credential and requires re-pairing. It must be
+different from both HTTP API tokens.
+
+Online presence, active WebSockets, heartbeat state, and pending commands are
+intentionally process-local and reset when Core restarts; a persisted device
+then appears offline until its Agent reconnects. Run a single Core worker until
+a shared message broker and presence store exist, because multiple workers
+cannot route a command to another process's WebSocket.
 
 ## Tests
 
@@ -282,7 +323,7 @@ libraries. Those dependencies belong in `app/api` or `app/infrastructure`.
 
 ## Planned capabilities
 
-- Persistent device identities and pairing audit history
+- Persistent pairing challenges and pairing audit history
 - Shared device routing through a message broker
 - Signed or mutual-TLS device identities
 - Agent-side app, path, and system-action policy adapters

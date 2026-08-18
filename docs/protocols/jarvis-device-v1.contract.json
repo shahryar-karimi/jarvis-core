@@ -1,0 +1,292 @@
+{
+  "contract": "jarvis-device.v1",
+  "protocol_version": 1,
+  "default_endpoint": "/api/v1/devices/ws",
+  "subprotocol": "jarvis-device.v1",
+  "authentication": {
+    "scheme": "Bearer",
+    "location": "Authorization header",
+    "query_credentials_accepted": false
+  },
+  "handshake_rejection": {
+    "http_status": 403,
+    "conditions": [
+      "gateway_unavailable",
+      "subprotocol_not_offered",
+      "credential_missing_invalid_or_revoked"
+    ]
+  },
+  "compatibility": {
+    "unknown_envelope_fields": "forbidden",
+    "unknown_payload_fields": "forbidden",
+    "json_numbers": "finite_only",
+    "breaking_changes_require": "jarvis-device.v2"
+  },
+  "envelope_fields": [
+    "v",
+    "type",
+    "message_id",
+    "session_id",
+    "payload"
+  ],
+  "limits": {
+    "device_hello_timeout_seconds": 10.0,
+    "message_id_replay_window": 1024,
+    "max_close_reason_bytes": 123
+  },
+  "capability_actions": {
+    "files": [
+      "list",
+      "read",
+      "write"
+    ],
+    "open_app": [
+      "open"
+    ],
+    "system": [
+      "get_info",
+      "get_status"
+    ]
+  },
+  "close_codes": {
+    "1001": "application_shutdown",
+    "1003": "text_json_required",
+    "1009": "message_too_large",
+    "1011": "internal_gateway_error",
+    "4400": "invalid_protocol_message",
+    "4403": "credential_revoked_after_upgrade",
+    "4408": "hello_or_heartbeat_timeout",
+    "4409": "connection_replaced"
+  },
+  "message_shapes": {
+    "device.hello": {
+      "direction": "agent_to_core",
+      "required_payload_fields": [
+        "agent",
+        "version",
+        "platform",
+        "capabilities"
+      ],
+      "optional_payload_fields": []
+    },
+    "heartbeat.pong": {
+      "direction": "agent_to_core",
+      "required_payload_fields": [
+        "nonce"
+      ],
+      "optional_payload_fields": []
+    },
+    "capabilities.update": {
+      "direction": "agent_to_core",
+      "required_payload_fields": [
+        "capabilities"
+      ],
+      "optional_payload_fields": []
+    },
+    "command.result": {
+      "direction": "agent_to_core",
+      "required_payload_fields": [
+        "command_id",
+        "succeeded"
+      ],
+      "optional_payload_fields": [
+        "output",
+        "error"
+      ]
+    },
+    "server.hello": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "device_id",
+        "heartbeat_interval_seconds",
+        "max_message_bytes"
+      ],
+      "optional_payload_fields": []
+    },
+    "server.ready": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "device_id",
+        "effective_capabilities"
+      ],
+      "optional_payload_fields": []
+    },
+    "heartbeat.ping": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "nonce"
+      ],
+      "optional_payload_fields": []
+    },
+    "capabilities.ack": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "effective_capabilities"
+      ],
+      "optional_payload_fields": []
+    },
+    "command.execute": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "command_id",
+        "capability",
+        "action",
+        "arguments",
+        "issued_at",
+        "deadline_at"
+      ],
+      "optional_payload_fields": []
+    },
+    "command.result_rejected": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "command_id",
+        "reason"
+      ],
+      "optional_payload_fields": []
+    },
+    "protocol.error": {
+      "direction": "core_to_agent",
+      "required_payload_fields": [
+        "code",
+        "detail"
+      ],
+      "optional_payload_fields": []
+    }
+  },
+  "golden_messages": {
+    "agent_to_core": [
+      {
+        "v": 1,
+        "type": "device.hello",
+        "message_id": "00000000-0000-4000-8000-000000000001",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "agent": "jarvis-agent",
+          "version": "1.0.0",
+          "platform": "windows",
+          "capabilities": [
+            "open_app",
+            "files",
+            "system"
+          ]
+        }
+      },
+      {
+        "v": 1,
+        "type": "heartbeat.pong",
+        "message_id": "00000000-0000-4000-8000-000000000002",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "nonce": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      {
+        "v": 1,
+        "type": "capabilities.update",
+        "message_id": "00000000-0000-4000-8000-000000000003",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "capabilities": [
+            "open_app"
+          ]
+        }
+      },
+      {
+        "v": 1,
+        "type": "command.result",
+        "message_id": "00000000-0000-4000-8000-000000000004",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "command_id": "33333333-3333-4333-8333-333333333333",
+          "succeeded": true,
+          "output": {
+            "opened": "PyCharm"
+          },
+          "error": null
+        }
+      }
+    ],
+    "core_to_agent": [
+      {
+        "v": 1,
+        "type": "server.hello",
+        "message_id": "00000000-0000-4000-8000-000000000005",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "device_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "heartbeat_interval_seconds": 30,
+          "max_message_bytes": 65536
+        }
+      },
+      {
+        "v": 1,
+        "type": "server.ready",
+        "message_id": "00000000-0000-4000-8000-000000000006",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "device_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "effective_capabilities": [
+            "open_app"
+          ]
+        }
+      },
+      {
+        "v": 1,
+        "type": "heartbeat.ping",
+        "message_id": "00000000-0000-4000-8000-000000000007",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "nonce": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      {
+        "v": 1,
+        "type": "capabilities.ack",
+        "message_id": "00000000-0000-4000-8000-000000000008",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "effective_capabilities": [
+            "open_app"
+          ]
+        }
+      },
+      {
+        "v": 1,
+        "type": "command.execute",
+        "message_id": "00000000-0000-4000-8000-000000000009",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "command_id": "33333333-3333-4333-8333-333333333333",
+          "capability": "open_app",
+          "action": "open",
+          "arguments": {
+            "name": "PyCharm"
+          },
+          "issued_at": "2026-08-18T12:00:00+00:00",
+          "deadline_at": "2026-08-18T12:00:30+00:00"
+        }
+      },
+      {
+        "v": 1,
+        "type": "command.result_rejected",
+        "message_id": "00000000-0000-4000-8000-00000000000a",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "command_id": "33333333-3333-4333-8333-333333333333",
+          "reason": "command_is_not_pending"
+        }
+      },
+      {
+        "v": 1,
+        "type": "protocol.error",
+        "message_id": "00000000-0000-4000-8000-00000000000b",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "payload": {
+          "code": "invalid_message",
+          "detail": "Message does not match the device protocol"
+        }
+      }
+    ]
+  }
+}

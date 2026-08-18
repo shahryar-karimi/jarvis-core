@@ -18,6 +18,7 @@ async def test_routes_use_lifespan_owned_resources_without_overrides(
     tmp_path: Path,
     test_settings: Settings,
     fake_provider,
+    owner_headers,
 ) -> None:
     database_url = f"sqlite+aiosqlite:///{(tmp_path / 'application.db').as_posix()}"
     settings = test_settings.model_copy(update={"database_url": database_url})
@@ -38,6 +39,7 @@ async def test_routes_use_lifespan_owned_resources_without_overrides(
         ) as client:
             memory_response = await client.put(
                 "/api/v1/memories",
+                headers=owner_headers,
                 json={
                     "category": "preferences",
                     "key": "favorite_editor",
@@ -46,6 +48,7 @@ async def test_routes_use_lifespan_owned_resources_without_overrides(
             )
             chat_response = await client.post(
                 "/api/v1/chat",
+                headers=owner_headers,
                 json={"message": "Which editor do I prefer?"},
             )
 

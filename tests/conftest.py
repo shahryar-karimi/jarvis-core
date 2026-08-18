@@ -6,6 +6,7 @@ from typing import Iterator
 
 import pytest
 from fastapi import FastAPI
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.api.dependencies import (
@@ -19,6 +20,11 @@ from app.core.config import Settings
 from app.domain.ai import AICapability, AIProvider, AIRequest, AIResponse
 from app.domain.memory import MemoryCategory, MemoryEntry, MemoryRepository
 from app.main import create_app
+
+
+OWNER_TOKEN = "test-owner-token-with-enough-entropy"
+OWNER_HEADERS = {"authorization": f"Bearer {OWNER_TOKEN}"}
+DEVICE_DIGEST_KEY = "test-device-digest-key-with-enough-entropy"
 
 
 class ExternalTestSettings(BaseSettings):
@@ -94,7 +100,14 @@ def test_settings() -> Settings:
         database_url="postgresql+asyncpg://unused:unused@127.0.0.1:1/unused",
         ai_provider="gemini",
         gemini_api_key=None,
+        owner_token=SecretStr(OWNER_TOKEN),
+        device_credential_digest_key=SecretStr(DEVICE_DIGEST_KEY),
     )
+
+
+@pytest.fixture
+def owner_headers() -> dict[str, str]:
+    return dict(OWNER_HEADERS)
 
 
 @pytest.fixture(scope="session")

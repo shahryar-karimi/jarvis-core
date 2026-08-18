@@ -25,7 +25,12 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, repr=False)
     gemini_model: str = "gemini-3.6-flash"
 
+    owner_token: SecretStr | None = Field(default=None, repr=False)
     device_admin_token: SecretStr | None = Field(default=None, repr=False)
+    device_credential_digest_key: SecretStr | None = Field(
+        default=None,
+        repr=False,
+    )
     device_pairing_ttl_seconds: int = Field(default=300, ge=30, le=3_600)
     device_heartbeat_interval_seconds: int = Field(default=30, ge=5, le=300)
     device_command_timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0)

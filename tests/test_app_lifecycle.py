@@ -52,8 +52,9 @@ async def test_lifespan_builds_shared_resources_once_and_closes_them(
         providers.append(provider)
         return provider
 
-    def hive_factory(settings: Settings) -> FakeHive:
+    def hive_factory(settings: Settings, session_factory: object) -> FakeHive:
         assert settings is test_settings
+        assert session_factory is databases[0].session_factory
         hive = FakeHive()
         hives.append(hive)
         return hive
@@ -142,8 +143,12 @@ async def test_lifespan_closes_earlier_resources_if_hive_creation_fails(
     database = FakeDatabase()
     provider = FakeAIProvider()
 
-    def failing_hive_factory(settings: Settings) -> FakeHive:
+    def failing_hive_factory(
+        settings: Settings,
+        session_factory: object,
+    ) -> FakeHive:
         assert settings is test_settings
+        assert session_factory is database.session_factory
         raise RuntimeError("hive initialization failed")
 
     application = create_app(

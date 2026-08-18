@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
 from app.infrastructure.database import Base
+from app.infrastructure.repositories.devices import (  # noqa: F401
+    DeviceCredentialRecord,
+    DeviceRecord,
+)
 from app.infrastructure.repositories.memory import MemoryRecord  # noqa: F401
 
 

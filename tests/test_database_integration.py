@@ -10,6 +10,7 @@ PowerShell:
 """
 
 import asyncio
+from datetime import timedelta
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
@@ -18,14 +19,24 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
+from app.domain.devices import DeviceCapability
 from app.domain.memory import MemoryCategory, MemoryEntry
 from app.infrastructure.database import Database
+from app.infrastructure.repositories.devices import (
+    DeviceCredentialRecord,
+    SqlAlchemyDeviceRegistry,
+)
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
+from app.infrastructure.security import (
+    DeviceCredentialCodec,
+    SqlAlchemyDeviceIdentity,
+    SqlAlchemyDevicePairing,
+)
 
 
 pytestmark = pytest.mark.integration
@@ -60,11 +71,20 @@ async def test_postgres_is_migrated_to_the_expected_schema(
                         item["name"]
                         for item in schema.get_unique_constraints("memories")
                     },
+                    {
+                        item["name"]
+                        for item in schema.get_unique_constraints(
+                            "device_credentials"
+                        )
+                    },
                 )
 
-            table_names, index_names, constraint_names = await connection.run_sync(
-                inspect_schema
-            )
+            (
+                table_names,
+                index_names,
+                constraint_names,
+                credential_constraint_names,
+            ) = await connection.run_sync(inspect_schema)
             revisions = set(
                 (
                     await connection.execute(
@@ -74,8 +94,13 @@ async def test_postgres_is_migrated_to_the_expected_schema(
             )
 
         assert "memories" in table_names
+        assert "devices" in table_names
+        assert "device_credentials" in table_names
         assert "ix_memories_category" in index_names
         assert "uq_memory_category_key" in constraint_names
+        assert credential_constraint_names == {
+            "uq_device_credentials_device_id"
+        }
         migration_scripts = ScriptDirectory.from_config(
             Config(PROJECT_ROOT / "alembic.ini")
         )
@@ -85,7 +110,7 @@ async def test_postgres_is_migrated_to_the_expected_schema(
 
 
 @pytest.mark.asyncio
-async def test_fresh_postgres_migration_supports_atomic_upserts(
+async def test_fresh_postgres_migration_supports_atomic_persistence(
     external_test_settings,
 ) -> None:
     require_database_tests(external_test_settings)
@@ -184,6 +209,55 @@ async def test_fresh_postgres_migration_supports_atomic_upserts(
                 Config(PROJECT_ROOT / "alembic.ini")
             )
             assert revisions == set(migration_scripts.get_heads())
+
+            identity = SqlAlchemyDeviceIdentity(
+                database.session_factory,
+                DeviceCredentialCodec(b"postgres-integration-device-digest-key"),
+            )
+            pairing = SqlAlchemyDevicePairing(
+                database.session_factory,
+                identity,
+            )
+            challenge = await pairing.create(
+                frozenset({DeviceCapability.OPEN_APP}),
+                timedelta(minutes=5),
+            )
+            credential = await pairing.claim(
+                challenge.id,
+                challenge.secret,
+                "Migration probe device",
+            )
+            assert credential is not None
+
+            restarted_identity = SqlAlchemyDeviceIdentity(
+                database.session_factory,
+                DeviceCredentialCodec(b"postgres-integration-device-digest-key"),
+            )
+            restarted_registry = SqlAlchemyDeviceRegistry(
+                database.session_factory
+            )
+            assert await restarted_identity.authenticate(credential.token) == (
+                credential.device.id
+            )
+            assert await restarted_registry.get(credential.device.id) == (
+                credential.device
+            )
+
+            rotated_token = await restarted_identity.issue(
+                credential.device.id
+            )
+            assert await restarted_identity.authenticate(credential.token) is None
+            assert await restarted_identity.authenticate(rotated_token) == (
+                credential.device.id
+            )
+            async with database.session_factory() as session:
+                credential_count = await session.scalar(
+                    select(func.count()).select_from(DeviceCredentialRecord)
+                )
+            assert credential_count == 1
+
+            await restarted_identity.revoke(credential.device.id)
+            assert await restarted_identity.authenticate(rotated_token) is None
         finally:
             await database.dispose()
     finally:

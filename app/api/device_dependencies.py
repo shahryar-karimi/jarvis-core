@@ -10,7 +10,12 @@ from app.domain.devices import CapabilityRegistry
 from app.infrastructure.hive import HiveResources
 
 
-_admin_bearer = HTTPBearer(auto_error=False)
+_admin_bearer = HTTPBearer(
+    auto_error=False,
+    scheme_name="DeviceAdminBearer",
+    bearerFormat="opaque",
+    description="Operator credential for device administration APIs.",
+)
 _PLACEHOLDER_ADMIN_TOKENS = {
     "change-me",
     "replace-me",
@@ -62,7 +67,10 @@ def require_device_admin(
     if (
         credentials is None
         or credentials.scheme.casefold() != "bearer"
-        or not secrets.compare_digest(supplied, expected)
+        or not secrets.compare_digest(
+            supplied.encode("utf-8"),
+            expected.encode("utf-8"),
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

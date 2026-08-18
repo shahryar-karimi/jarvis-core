@@ -15,6 +15,7 @@ from app.domain.security import (
     DevicePairing,
     DevicePairingChallenge,
 )
+from app.infrastructure.security.credentials import DeviceCredentialCodec
 
 
 Clock = Callable[[], datetime]
@@ -40,33 +41,29 @@ class InMemoryDeviceIdentity(DeviceIdentity):
         id_factory: IdFactory = uuid4,
         token_factory: TokenFactory | None = None,
     ) -> None:
-        if digest_key is not None and len(digest_key) < 32:
-            raise ValueError("credential digest key must contain at least 32 bytes")
-        self._digest_key = digest_key or secrets.token_bytes(32)
-        self._id_factory = id_factory
-        self._token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
+        self._codec = DeviceCredentialCodec(
+            digest_key or secrets.token_bytes(32),
+            id_factory=id_factory,
+            token_factory=token_factory,
+        )
         self._credentials: dict[UUID, _CredentialRecord] = {}
         self._device_tokens: dict[UUID, set[UUID]] = {}
         self._lock = asyncio.Lock()
 
     async def issue(self, device_id: UUID) -> str:
-        token_id = self._id_factory()
-        token_secret = self._token_factory()
-        if len(token_secret) < 16:
-            raise ValueError("device token secret is too short")
-        token = f"{self.TOKEN_PREFIX}.{token_id}.{token_secret}"
-        record = _CredentialRecord(device_id=device_id, digest=self._digest(token))
+        issued = self._codec.issue()
+        record = _CredentialRecord(device_id=device_id, digest=issued.digest)
 
         async with self._lock:
-            if token_id in self._credentials:
+            if issued.id in self._credentials:
                 raise RuntimeError("device token identifier collision")
             # Issuing a new credential rotates every previous credential for
             # this device, so a lost token cannot remain valid indefinitely.
             for previous_id in self._device_tokens.pop(device_id, set()):
                 self._credentials.pop(previous_id, None)
-            self._credentials[token_id] = record
-            self._device_tokens[device_id] = {token_id}
-        return token
+            self._credentials[issued.id] = record
+            self._device_tokens[device_id] = {issued.id}
+        return issued.token
 
     async def authenticate(self, token: str) -> UUID | None:
         token_id = self._parse_token_id(token)
@@ -77,7 +74,7 @@ class InMemoryDeviceIdentity(DeviceIdentity):
             record = self._credentials.get(token_id)
             if record is None:
                 return None
-            if not hmac.compare_digest(record.digest, self._digest(token)):
+            if not self._codec.matches(token, record.digest):
                 return None
             return record.device_id
 
@@ -87,19 +84,11 @@ class InMemoryDeviceIdentity(DeviceIdentity):
                 self._credentials.pop(token_id, None)
 
     def _digest(self, value: str) -> bytes:
-        return hmac.digest(self._digest_key, value.encode("utf-8"), "sha256")
+        return self._codec.digest(value)
 
     @classmethod
     def _parse_token_id(cls, token: str) -> UUID | None:
-        if len(token) > 256:
-            return None
-        parts = token.split(".")
-        if len(parts) != 3 or parts[0] != cls.TOKEN_PREFIX or not parts[2]:
-            return None
-        try:
-            return UUID(parts[1])
-        except ValueError:
-            return None
+        return DeviceCredentialCodec.parse_token_id(token)
 
 
 @dataclass(slots=True)

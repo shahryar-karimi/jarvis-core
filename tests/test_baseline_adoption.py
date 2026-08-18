@@ -1,13 +1,17 @@
+import asyncio
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 import pytest
 from sqlalchemy import inspect, text
 
-from app.infrastructure.database import Base, Database
-from app.infrastructure.repositories.memory import MemoryRecord  # noqa: F401
+from app.infrastructure.database import Database
+from app.infrastructure.repositories.memory import MemoryRecord
 from scripts.adopt_alembic_baseline import (
     BASELINE_REVISION,
     BaselineAdoptionError,
+    PROJECT_ROOT,
     adopt_baseline,
 )
 
@@ -21,7 +25,10 @@ async def test_adopting_matching_schema_preserves_existing_rows(
     database = Database(database_url)
     try:
         async with database.engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+            # Reproduce exactly the pre-Alembic schema. Using the global Base
+            # metadata here would also create tables introduced after 0001 as
+            # soon as their ORM modules are imported during test collection.
+            await connection.run_sync(MemoryRecord.__table__.create)
             await connection.execute(
                 text(
                     "INSERT INTO memories "
@@ -49,6 +56,28 @@ async def test_adopting_matching_schema_preserves_existing_rows(
             assert await connection.scalar(
                 text("SELECT version_num FROM alembic_version")
             ) == BASELINE_REVISION
+    finally:
+        await database.dispose()
+
+    migration_config = Config(PROJECT_ROOT / "alembic.ini")
+    migration_config.attributes["database_url"] = database_url
+    await asyncio.to_thread(command.upgrade, migration_config, "head")
+
+    database = Database(database_url)
+    try:
+        async with database.engine.connect() as connection:
+            tables = await connection.run_sync(
+                lambda sync_connection: set(
+                    inspect(sync_connection).get_table_names()
+                )
+            )
+            assert {"memories", "devices", "device_credentials"} <= tables
+            assert await connection.scalar(
+                text("SELECT value FROM memories WHERE key = 'favorite_editor'")
+            ) == "PyCharm"
+            assert await connection.scalar(
+                text("SELECT version_num FROM alembic_version")
+            ) == "0002_persist_devices"
     finally:
         await database.dispose()
 

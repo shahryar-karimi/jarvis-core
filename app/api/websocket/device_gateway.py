@@ -10,14 +10,25 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, WebSocket
 from pydantic import ValidationError
+from starlette.responses import Response
 from starlette.websockets import WebSocketDisconnect
 
 from app.api.websocket.protocol import (
+    CLOSE_INTERNAL_ERROR,
+    CLOSE_MESSAGE_TOO_LARGE,
+    CLOSE_PROTOCOL_ERROR,
+    CLOSE_TIMEOUT,
+    CLOSE_UNSUPPORTED_DATA,
     DEVICE_SUBPROTOCOL,
+    DEVICE_HELLO_TIMEOUT_SECONDS,
+    HANDSHAKE_REJECTION_STATUS,
+    MAX_CLOSE_REASON_BYTES,
+    MESSAGE_REPLAY_WINDOW,
     CapabilitiesUpdateMessage,
     CommandResultMessage,
     DeviceHelloMessage,
     HeartbeatPongMessage,
+    ServerMessageType,
     device_message_adapter,
     serialize_datetime,
     server_message,
@@ -68,7 +79,7 @@ class WebSocketDeviceTransport(DeviceTransport):
 
     async def send_message(
         self,
-        message_type: str,
+        message_type: ServerMessageType,
         session_id: UUID,
         payload: dict[str, Any],
     ) -> None:
@@ -85,7 +96,10 @@ class WebSocketDeviceTransport(DeviceTransport):
                 return
             self._closed = True
             with suppress(RuntimeError, WebSocketDisconnect):
-                await self._websocket.close(code=code, reason=reason[:123])
+                await self._websocket.close(
+                    code=code,
+                    reason=_truncate_close_reason(reason),
+                )
 
 
 @router.websocket("/ws")
@@ -93,21 +107,21 @@ async def device_gateway(websocket: WebSocket) -> None:
     resources = cast(HiveResources | None, getattr(websocket.app.state, "hive", None))
     settings = cast(Settings, websocket.app.state.settings)
     if resources is None:
-        await websocket.close(code=1013, reason="Gateway unavailable")
+        await _reject_handshake(websocket)
         return
     service = resources.device_service
 
     if not _supports_protocol(websocket):
-        await websocket.close(code=4406, reason="Protocol version required")
+        await _reject_handshake(websocket)
         return
     token = _bearer_token(websocket)
     if token is None:
-        await websocket.close(code=4403, reason="Authentication failed")
+        await _reject_handshake(websocket)
         return
     try:
         device = await service.authenticate(token)
     except DeviceAuthenticationError:
-        await websocket.close(code=4403, reason="Authentication failed")
+        await _reject_handshake(websocket)
         return
 
     await websocket.accept(subprotocol=DEVICE_SUBPROTOCOL)
@@ -116,7 +130,7 @@ async def device_gateway(websocket: WebSocket) -> None:
     heartbeat_task: asyncio.Task[None] | None = None
     heartbeat_nonce: UUID | None = None
     heartbeat_received = asyncio.Event()
-    seen_ids: deque[UUID] = deque(maxlen=1_024)
+    seen_ids: deque[UUID] = deque(maxlen=MESSAGE_REPLAY_WINDOW)
     seen_id_set: set[UUID] = set()
 
     try:
@@ -135,10 +149,10 @@ async def device_gateway(websocket: WebSocket) -> None:
         try:
             hello = await asyncio.wait_for(
                 _receive_message(websocket, settings.device_max_message_bytes),
-                timeout=10.0,
+                timeout=DEVICE_HELLO_TIMEOUT_SECONDS,
             )
         except TimeoutError:
-            await transport.close(4408, "Device hello timed out")
+            await transport.close(CLOSE_TIMEOUT, "Device hello timed out")
             return
         if not isinstance(hello, DeviceHelloMessage):
             await _protocol_error(
@@ -184,7 +198,7 @@ async def device_gateway(websocket: WebSocket) -> None:
                         timeout=max(1.0, interval / 2),
                     )
                 except TimeoutError:
-                    await transport.close(4408, "Heartbeat timed out")
+                    await transport.close(CLOSE_TIMEOUT, "Heartbeat timed out")
                     return
 
         heartbeat_task = asyncio.create_task(heartbeat_loop())
@@ -255,7 +269,7 @@ async def device_gateway(websocket: WebSocket) -> None:
         pass
     except Exception:
         logger.exception("Device gateway failed for device %s", device.id)
-        await transport.close(1011, "Internal gateway error")
+        await transport.close(CLOSE_INTERNAL_ERROR, "Internal gateway error")
     finally:
         if heartbeat_task is not None:
             heartbeat_task.cancel()
@@ -270,6 +284,25 @@ def _supports_protocol(websocket: WebSocket) -> bool:
     return DEVICE_SUBPROTOCOL in {
         protocol.strip() for protocol in requested.split(",") if protocol.strip()
     }
+
+
+async def _reject_handshake(websocket: WebSocket) -> None:
+    """Reject before upgrade with one non-oracular HTTP response."""
+
+    response = Response(status_code=HANDSHAKE_REJECTION_STATUS)
+    try:
+        await websocket.send_denial_response(response)
+    except RuntimeError:
+        # ASGI servers without the denial-response extension still translate a
+        # pre-accept close into an HTTP 403 handshake rejection.
+        await websocket.close()
+
+
+def _truncate_close_reason(reason: str) -> str:
+    encoded = reason.encode("utf-8")
+    if len(encoded) <= MAX_CLOSE_REASON_BYTES:
+        return reason
+    return encoded[:MAX_CLOSE_REASON_BYTES].decode("utf-8", errors="ignore")
 
 
 def _bearer_token(websocket: WebSocket) -> str | None:
@@ -288,11 +321,17 @@ async def _receive_message(websocket: WebSocket, max_bytes: int):
             reason=event.get("reason", ""),
         )
     if event.get("bytes") is not None:
-        await websocket.close(code=1003, reason="Text JSON messages are required")
+        await websocket.close(
+            code=CLOSE_UNSUPPORTED_DATA,
+            reason="Text JSON messages are required",
+        )
         raise _ProtocolClosed
     raw = event.get("text", "")
     if len(raw.encode("utf-8")) > max_bytes:
-        await websocket.close(code=1009, reason="Message is too large")
+        await websocket.close(
+            code=CLOSE_MESSAGE_TOO_LARGE,
+            reason="Message is too large",
+        )
         raise _ProtocolClosed
     return device_message_adapter.validate_python(json.loads(raw))
 
@@ -327,4 +366,4 @@ async def _protocol_error(
             session_id,
             {"code": code, "detail": detail},
         )
-    await transport.close(4400, "Invalid device protocol message")
+    await transport.close(CLOSE_PROTOCOL_ERROR, "Invalid device protocol message")
