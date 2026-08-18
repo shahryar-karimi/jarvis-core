@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     assistant_name: str = "JARVIS"
     user_name: str = ""
 
-    database_url: str = "postgresql+asyncpg://jarvis:jarvis@localhost:5432/jarvis"
+    database_url: str = "postgresql+asyncpg://jarvis:jarvis@localhost:5433/jarvis"
 
     ai_provider: str = "gemini"
     gemini_api_key: str | None = Field(default=None, repr=False)

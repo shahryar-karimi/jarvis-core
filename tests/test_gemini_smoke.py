@@ -38,16 +38,22 @@ async def test_real_gemini_returns_text(external_test_settings) -> None:
     provider = GeminiProvider(settings.gemini_api_key, settings.gemini_model)
     rejection: str | None = None
     try:
-        response = await provider.complete(
-            AIRequest(
-                user_message="Reply with only the word OK.",
-                system_prompt="You are a connectivity test. Follow the request exactly.",
+        try:
+            response = await provider.complete(
+                AIRequest(
+                    user_message="Reply with only the word OK.",
+                    system_prompt=(
+                        "You are a connectivity test. Follow the request exactly."
+                    ),
+                )
             )
-        )
-    except ClientError as error:
-        rejection = (
-            f"Gemini request rejected ({error.code} {error.status}): {error.message}"
-        )
+        except ClientError as error:
+            rejection = (
+                "Gemini request rejected "
+                f"({error.code} {error.status}): {error.message}"
+            )
+    finally:
+        await provider.aclose()
 
     if rejection:
         pytest.fail(

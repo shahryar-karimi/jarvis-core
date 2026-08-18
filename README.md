@@ -31,8 +31,10 @@ app/
   domain/           AI and memory contracts
   infrastructure/   Database repositories and AI provider adapters
   prompts/          System prompt resources
+migrations/         Alembic environment and versioned schema changes
 scripts/            Operational utilities
 tests/              Unit, API, integration, and live smoke tests
+alembic.ini          Alembic command configuration
 ```
 
 The dependency direction is inward: `domain` and `application` define the
@@ -73,13 +75,79 @@ business behavior, while `api` and `infrastructure` provide external adapters.
 
    On macOS or Linux, activate it with `source .venv/bin/activate`.
 
-5. Start the API:
+5. Apply the database migrations:
+
+   ```powershell
+   python -m alembic upgrade head
+   ```
+
+6. Start the API:
 
    ```powershell
    python -m uvicorn app.main:app --reload
    ```
 
-6. Open `http://localhost:8000/docs` for the interactive API documentation.
+7. Open `http://localhost:8000/docs` for the interactive API documentation.
+
+## Application composition
+
+`app.main.create_app()` is the composition root. It resolves configuration once,
+then the FastAPI lifespan creates one database engine, AI provider client, and
+prompt builder for that application instance. Request dependencies borrow those
+shared resources, while shutdown closes the provider and database reliably.
+
+Application startup does not create or alter tables. Schema changes are explicit,
+versioned Alembic migrations that must run before the corresponding application
+version is started.
+
+## Database migrations
+
+Apply all pending migrations and verify the database is at the latest revision:
+
+```powershell
+python -m alembic upgrade head
+python -m alembic current --check-heads
+```
+
+After changing an ORM model, generate and review a candidate migration:
+
+```powershell
+python -m alembic revision --autogenerate -m "describe the schema change"
+python -m alembic check
+```
+
+Never put a database URL in `alembic.ini`; migration commands read
+`JARVIS_DATABASE_URL` through the same settings used by the application.
+
+If a database already has the original `memories` table but no
+`alembic_version` table, back it up and verify that its columns, constraint, and
+index exactly match revision `0001_create_memories`. Only then record the
+baseline without recreating the table:
+
+```powershell
+python -m alembic stamp 0001_create_memories
+python -m alembic current --check-heads
+```
+
+Do not use `stamp` for an empty database; use `upgrade head` so Alembic actually
+creates the schema.
+
+The safer project command performs that schema comparison before it stamps an
+existing database:
+
+```powershell
+python scripts/adopt_alembic_baseline.py
+```
+
+## Operational utilities
+
+Before importing a memory JSON export, confirm that the target database is at
+the current migration head, then run the importer:
+
+```powershell
+python -m alembic current --check-heads
+python scripts/import_legacy_memory.py C:\path\to\long_term.json
+```
 
 ## Configuration
 
@@ -113,8 +181,9 @@ RUN_DB_TESTS=1
 RUN_LIVE_AI_TESTS=1
 ```
 
-With both enabled, the normal command runs the entire suite. The Gemini test
-makes a real request and may consume quota:
+With both enabled, the normal command runs the entire suite. The PostgreSQL test
+requires the configured database to be migrated to `head`. The Gemini test makes
+a real request and may consume quota:
 
 ```powershell
 python -m pytest -v
@@ -124,7 +193,9 @@ The live check is intentionally strict: invalid credentials, an unavailable
 model, or a provider region restriction fails the test instead of silently
 skipping it.
 
-Run only the safe offline suite without contacting PostgreSQL or Gemini:
+Run only the safe offline suite without contacting PostgreSQL or Gemini. This
+still exercises the full Alembic upgrade/check/downgrade path against an isolated
+temporary SQLite database:
 
 ```powershell
 python -m pytest -m "not integration and not live" -v

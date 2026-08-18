@@ -1,45 +1,56 @@
-from pathlib import Path
-from typing import Annotated
+from collections.abc import AsyncIterator
+from typing import Annotated, cast
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.assistant_service import AssistantService
 from app.application.prompt_builder import PromptBuilder
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.domain.ai import AIProvider
-from app.infrastructure.ai.gemini import GeminiProvider
-from app.infrastructure.database import get_session
+from app.infrastructure.database import Database
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
 
-SettingsDep = Annotated[Settings, Depends(get_settings)]
+def _app_resource(request: Request, name: str) -> object:
+    try:
+        return getattr(request.app.state, name)
+    except AttributeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Application resources are not initialized.",
+        ) from error
+
+
+def get_app_settings(request: Request) -> Settings:
+    return request.app.state.settings
+
+
+def get_database(request: Request) -> Database:
+    return cast(Database, _app_resource(request, "database"))
+
+
+async def get_session(
+    database: Annotated[Database, Depends(get_database)],
+) -> AsyncIterator[AsyncSession]:
+    async with database.session_factory() as session:
+        yield session
+
+
+SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-def get_ai_provider(settings: SettingsDep) -> AIProvider:
-    provider_name = settings.ai_provider.lower()
-    if provider_name == "gemini":
-        if not settings.gemini_api_key:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Gemini is selected but JARVIS_GEMINI_API_KEY is not configured.",
-            )
-        return GeminiProvider(settings.gemini_api_key, settings.gemini_model)
-
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=f"AI provider '{provider_name}' is not implemented yet.",
-    )
+def get_ai_provider(request: Request) -> AIProvider:
+    return cast(AIProvider, _app_resource(request, "ai_provider"))
 
 
 def get_memory_repository(session: SessionDep) -> SqlAlchemyMemoryRepository:
     return SqlAlchemyMemoryRepository(session)
 
 
-def get_prompt_builder(settings: SettingsDep) -> PromptBuilder:
-    path = Path(__file__).resolve().parent.parent / "prompts" / "base_system.txt"
-    return PromptBuilder(settings, path)
+def get_prompt_builder(request: Request) -> PromptBuilder:
+    return cast(PromptBuilder, _app_resource(request, "prompt_builder"))
 
 
 def get_assistant_service(

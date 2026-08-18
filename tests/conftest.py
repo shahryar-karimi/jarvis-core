@@ -14,7 +14,7 @@ from app.api.dependencies import (
     get_prompt_builder,
 )
 from app.application.prompt_builder import PromptBuilder
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.domain.ai import AICapability, AIProvider, AIRequest, AIResponse
 from app.domain.memory import MemoryCategory, MemoryEntry, MemoryRepository
 from app.main import create_app
@@ -114,7 +114,6 @@ def fake_memory_repository() -> FakeMemoryRepository:
 @pytest.fixture
 def app(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     test_settings: Settings,
     fake_provider: FakeAIProvider,
     fake_memory_repository: FakeMemoryRepository,
@@ -126,9 +125,7 @@ def app(
     )
     prompt_builder = PromptBuilder(test_settings, base_prompt)
 
-    monkeypatch.setattr("app.main.get_settings", lambda: test_settings)
-    application = create_app()
-    application.dependency_overrides[get_settings] = lambda: test_settings
+    application = create_app(test_settings)
     application.dependency_overrides[get_ai_provider] = lambda: fake_provider
     application.dependency_overrides[get_memory_repository] = (
         lambda: fake_memory_repository

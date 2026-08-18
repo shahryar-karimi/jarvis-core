@@ -33,3 +33,9 @@ class GeminiProvider(AIProvider):
             provider=self.name,
             model=self._model,
         )
+
+    async def aclose(self) -> None:
+        try:
+            await self._client.aio.aclose()
+        finally:
+            self._client.close()

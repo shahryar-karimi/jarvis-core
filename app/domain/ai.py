@@ -40,3 +40,6 @@ class AIProvider(ABC):
     @abstractmethod
     async def complete(self, request: AIRequest) -> AIResponse:
         raise NotImplementedError
+
+    async def aclose(self) -> None:
+        """Release provider-owned resources when the application stops."""

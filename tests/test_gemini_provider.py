@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from google import genai
@@ -48,3 +48,20 @@ async def test_gemini_provider_maps_requests_and_responses(monkeypatch) -> None:
     assert response.text == "answer"
     assert response.provider == "gemini"
     assert response.model == "gemini-test"
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_closes_sync_and_async_clients(monkeypatch) -> None:
+    async_close = AsyncMock()
+    sync_close = Mock()
+    client = SimpleNamespace(
+        aio=SimpleNamespace(aclose=async_close),
+        close=sync_close,
+    )
+    monkeypatch.setattr(genai, "Client", lambda api_key: client)
+    provider = GeminiProvider("test-key", "gemini-test")
+
+    await provider.aclose()
+
+    async_close.assert_awaited_once_with()
+    sync_close.assert_called_once_with()

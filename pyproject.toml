@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Cloud brain and orchestration service for JARVIS"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.19,<2.0",
   "fastapi>=0.116,<1.0",
   "uvicorn[standard]>=0.35,<1.0",
   "pydantic>=2.11,<3.0",
