@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, String, Text, UniqueConstraint, delete, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,7 +12,9 @@ from app.infrastructure.database import Base
 
 class MemoryRecord(Base):
     __tablename__ = "memories"
-    __table_args__ = (UniqueConstraint("category", "key", name="uq_memory_category_key"),)
+    __table_args__ = (
+        UniqueConstraint("category", "key", name="uq_memory_category_key"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -24,27 +28,53 @@ class SqlAlchemyMemoryRepository(MemoryRepository):
         self._session = session
 
     async def list_all(self) -> list[MemoryEntry]:
-        records = (await self._session.scalars(select(MemoryRecord).order_by(MemoryRecord.updated_at.desc()))).all()
+        statement = select(MemoryRecord).order_by(MemoryRecord.updated_at.desc())
+        records = (await self._session.scalars(statement)).all()
         return [self._to_domain(record) for record in records]
 
-    async def upsert(self, category: MemoryCategory, key: str, value: str) -> MemoryEntry:
-        record = await self._session.scalar(
-            select(MemoryRecord).where(
-                MemoryRecord.category == category.value,
-                MemoryRecord.key == key,
-            )
-        )
+    async def upsert(
+        self,
+        category: MemoryCategory,
+        key: str,
+        value: str,
+    ) -> MemoryEntry:
+        """Insert or update one composite key in a single database statement."""
+
         now = datetime.now(timezone.utc)
-        if record is None:
-            record = MemoryRecord(category=category.value, key=key, value=value, updated_at=now)
-            self._session.add(record)
+        values = {
+            "category": category.value,
+            "key": key,
+            "value": value,
+            "updated_at": now,
+        }
+        dialect_name = self._session.get_bind().dialect.name
+        if dialect_name == "postgresql":
+            insert_statement = postgresql_insert(MemoryRecord).values(**values)
+        elif dialect_name == "sqlite":
+            insert_statement = sqlite_insert(MemoryRecord).values(**values)
         else:
-            record.value = value
-            record.updated_at = now
+            raise RuntimeError(
+                f"Atomic memory upsert is not implemented for '{dialect_name}'."
+            )
+
+        upsert_statement = insert_statement.on_conflict_do_update(
+            index_elements=[MemoryRecord.category, MemoryRecord.key],
+            set_={
+                "value": insert_statement.excluded.value,
+                "updated_at": insert_statement.excluded.updated_at,
+            },
+        ).returning(MemoryRecord)
+        record = (
+            await self._session.scalars(
+                upsert_statement,
+                # A conflicting row may already be present in this identity map.
+                execution_options={"populate_existing": True},
+            )
+        ).one()
+        entry = self._to_domain(record)
 
         await self._session.commit()
-        await self._session.refresh(record)
-        return self._to_domain(record)
+        return entry
 
     async def delete(self, category: MemoryCategory, key: str) -> bool:
         result = await self._session.execute(

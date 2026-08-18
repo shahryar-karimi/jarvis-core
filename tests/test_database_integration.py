@@ -11,6 +11,7 @@ PowerShell:
 
 import asyncio
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -22,7 +23,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
-from app.domain.memory import MemoryCategory
+from app.domain.memory import MemoryCategory, MemoryEntry
 from app.infrastructure.database import Database
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
@@ -84,7 +85,7 @@ async def test_postgres_is_migrated_to_the_expected_schema(
 
 
 @pytest.mark.asyncio
-async def test_migration_builds_a_working_fresh_postgres_database(
+async def test_fresh_postgres_migration_supports_atomic_upserts(
     external_test_settings,
 ) -> None:
     require_database_tests(external_test_settings)
@@ -126,6 +127,50 @@ async def test_migration_builds_a_working_fresh_postgres_database(
                 assert [(entry.key, entry.value) for entry in entries] == [
                     ("migration_probe", "The migrated repository is writable.")
                 ]
+
+            concurrent_values = [f"value-{index}" for index in range(8)]
+            barrier = asyncio.Barrier(len(concurrent_values))
+            session_ids: set[int] = set()
+
+            async def write_concurrently(value: str) -> MemoryEntry:
+                async with database.session_factory() as session:
+                    session_ids.add(id(session))
+                    repository = SqlAlchemyMemoryRepository(session)
+                    await barrier.wait()
+                    return await repository.upsert(
+                        MemoryCategory.PREFERENCES,
+                        "concurrent_key",
+                        value,
+                    )
+
+            outcomes = await asyncio.gather(
+                *(write_concurrently(value) for value in concurrent_values),
+                return_exceptions=True,
+            )
+            failures = [
+                outcome
+                for outcome in outcomes
+                if isinstance(outcome, BaseException)
+            ]
+            assert failures == []
+            assert len(session_ids) == len(concurrent_values)
+            concurrent_results = [
+                cast(MemoryEntry, outcome) for outcome in outcomes
+            ]
+            assert {entry.value for entry in concurrent_results} == set(
+                concurrent_values
+            )
+
+            async with database.session_factory() as session:
+                repository = SqlAlchemyMemoryRepository(session)
+                concurrent_entries = [
+                    entry
+                    for entry in await repository.list_all()
+                    if entry.category is MemoryCategory.PREFERENCES
+                    and entry.key == "concurrent_key"
+                ]
+            assert len(concurrent_entries) == 1
+            assert concurrent_entries[0].value in concurrent_values
 
             async with database.engine.connect() as connection:
                 revisions = set(
