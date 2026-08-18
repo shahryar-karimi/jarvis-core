@@ -94,6 +94,16 @@ business behavior, while `api` and `infrastructure` provide external adapters.
 
 7. Open `http://localhost:8000/docs` for the interactive API documentation.
 
+## Deploy to a VPS
+
+The production stack runs Caddy, one JARVIS Core process, and PostgreSQL on a
+private Docker network. Only Caddy publishes host ports. Follow the
+[production deployment runbook](docs/deployment.md) to configure DNS and
+secrets, migrate the database, verify HTTPS/WSS, and establish backup and
+rollback procedures. Start from
+[`.env.production.example`](.env.production.example); never deploy the local
+development Compose configuration or commit `.env.production`.
+
 ## Application composition
 
 `app.main.create_app()` is the composition root. It resolves configuration once,
@@ -172,6 +182,8 @@ Important `.env` settings include:
 - `JARVIS_GEMINI_API_KEY`
 - `JARVIS_GEMINI_MODEL`
 - `JARVIS_CORS_ORIGINS`
+- `JARVIS_TRUSTED_HOSTS`
+- `JARVIS_DOCS_ENABLED`
 - `JARVIS_OWNER_TOKEN`
 - `JARVIS_DEVICE_ADMIN_TOKEN`
 - `JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY`
@@ -187,6 +199,7 @@ Use [.env.example](.env.example) as the configuration template.
 ## API endpoints
 
 - `GET /api/v1/health`
+- `GET /api/v1/health/ready`
 - `POST /api/v1/chat`
 - `GET /api/v1/memories`
 - `PUT /api/v1/memories`
@@ -218,10 +231,12 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 Keep it separate from `JARVIS_DEVICE_ADMIN_TOKEN`: the owner token authorizes
 private assistant data, while the device-admin token authorizes pairing,
-revocation, and command dispatch. `GET /api/v1/health` remains public. Device
-pairing claims use their one-time pairing secret, and Agent WebSockets use their
-own device credential. Use HTTPS outside local development so bearer
-credentials are encrypted in transit.
+revocation, and command dispatch. The liveness and readiness endpoints remain
+public; readiness reports only whether PostgreSQL is reachable and migrations
+are current, without exposing connection details. Device pairing claims use
+their one-time pairing secret, and Agent WebSockets use their own device
+credential. Use HTTPS outside local development so bearer credentials are
+encrypted in transit.
 
 ## Device gateway
 

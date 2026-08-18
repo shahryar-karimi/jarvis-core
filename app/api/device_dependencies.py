@@ -57,6 +57,7 @@ def require_device_admin(
     expected = configured.get_secret_value().strip() if configured else ""
     if (
         len(expected) < 32
+        or not expected.isascii()
         or expected.casefold() in _PLACEHOLDER_ADMIN_TOKENS
     ):
         raise HTTPException(

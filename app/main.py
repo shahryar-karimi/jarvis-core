@@ -4,13 +4,14 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.exception_handlers import device_error_handler, memory_not_found_handler
 from app.api.router import api_router
 from app.application.memory_service import MemoryNotFoundError
 from app.application.prompt_builder import PromptBuilder
-from app.core.config import Settings, get_settings
+from app.core.config import Settings, get_settings, validate_runtime_settings
 from app.domain.ai import AIProvider
 from app.domain.devices import DeviceError
 from app.infrastructure.ai.factory import create_ai_provider
@@ -34,6 +35,7 @@ def create_app(
     hive_factory: HiveFactory = create_hive_resources,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
+    validate_runtime_settings(resolved_settings)
     prompt_path = Path(__file__).resolve().parent / "prompts" / "base_system.txt"
 
     @asynccontextmanager
@@ -79,6 +81,9 @@ def create_app(
         version="0.1.0",
         description="Cloud brain and orchestration layer for JARVIS.",
         lifespan=lifespan,
+        docs_url="/docs" if resolved_settings.docs_enabled else None,
+        redoc_url="/redoc" if resolved_settings.docs_enabled else None,
+        openapi_url="/openapi.json" if resolved_settings.docs_enabled else None,
     )
     application.state.settings = resolved_settings
     application.add_exception_handler(
@@ -92,6 +97,10 @@ def create_app(
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=resolved_settings.trusted_hosts,
     )
     application.include_router(api_router, prefix=resolved_settings.api_prefix)
     return application

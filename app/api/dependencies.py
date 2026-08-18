@@ -7,10 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.assistant_service import AssistantService
 from app.application.memory_service import MemoryService
 from app.application.prompt_builder import PromptBuilder
+from app.application.readiness_service import ReadinessService
 from app.core.config import Settings
 from app.domain.ai import AIProvider
 from app.domain.memory import MemoryRepository
 from app.infrastructure.database import Database
+from app.infrastructure.readiness import SqlAlchemyReadinessProbe
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
 
@@ -41,6 +43,15 @@ async def get_session(
 
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def get_readiness_service(
+    database: Annotated[Database, Depends(get_database)],
+) -> ReadinessService:
+    return ReadinessService(SqlAlchemyReadinessProbe(database.engine))
+
+
+ReadinessServiceDep = Annotated[ReadinessService, Depends(get_readiness_service)]
 
 
 def get_ai_provider(request: Request) -> AIProvider:

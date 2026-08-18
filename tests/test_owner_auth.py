@@ -81,6 +81,7 @@ async def test_owner_auth_runs_before_request_body_validation(
         None,
         SecretStr("too-short"),
         SecretStr("replace-with-a-random-secret"),
+        SecretStr("é" * 32),
     ],
 )
 async def test_unconfigured_owner_auth_fails_closed_but_health_stays_public(
@@ -212,6 +213,7 @@ def test_openapi_distinguishes_owner_and_device_admin_security(app) -> None:
         ]
 
     assert "security" not in schema["paths"]["/api/v1/health"]["get"]
+    assert "security" not in schema["paths"]["/api/v1/health/ready"]["get"]
     assert "security" not in schema["paths"]["/api/v1/devices/pair"]["post"]
 
 
@@ -229,6 +231,7 @@ def test_every_http_operation_has_an_explicit_security_policy(app) -> None:
     schema = app.openapi()
     expected_public = {
         ("/api/v1/health", "get"),
+        ("/api/v1/health/ready", "get"),
         ("/api/v1/devices/pair", "post"),
     }
     expected_owner = {

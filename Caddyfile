@@ -1,0 +1,30 @@
+{
+	admin off
+	email {$CADDY_ACME_EMAIL}
+}
+
+{$JARVIS_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+
+	encode zstd gzip
+
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy core:8000 {
+		health_uri /api/v1/health/ready
+		health_interval 30s
+		health_timeout 5s
+	}
+}

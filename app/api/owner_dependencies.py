@@ -32,6 +32,7 @@ def require_owner(
     expected = configured.get_secret_value().strip() if configured else ""
     if (
         len(expected) < 32
+        or not expected.isascii()
         or expected.casefold() in _PLACEHOLDER_OWNER_TOKENS
     ):
         raise HTTPException(
