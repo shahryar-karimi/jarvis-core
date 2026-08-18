@@ -5,18 +5,21 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.exception_handlers import memory_not_found_handler
+from app.api.exception_handlers import device_error_handler, memory_not_found_handler
 from app.api.router import api_router
 from app.application.memory_service import MemoryNotFoundError
 from app.application.prompt_builder import PromptBuilder
 from app.core.config import Settings, get_settings
 from app.domain.ai import AIProvider
+from app.domain.devices import DeviceError
 from app.infrastructure.ai.factory import create_ai_provider
 from app.infrastructure.database import Database
+from app.infrastructure.hive import HiveResources, create_hive_resources
 
 
 DatabaseFactory = Callable[[str], Database]
 AIProviderFactory = Callable[[Settings], AIProvider]
+HiveFactory = Callable[[Settings], HiveResources]
 
 
 def create_app(
@@ -24,6 +27,7 @@ def create_app(
     *,
     database_factory: DatabaseFactory = Database,
     ai_provider_factory: AIProviderFactory = create_ai_provider,
+    hive_factory: HiveFactory = create_hive_resources,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     prompt_path = Path(__file__).resolve().parent / "prompts" / "base_system.txt"
@@ -32,6 +36,7 @@ def create_app(
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         database = database_factory(resolved_settings.database_url)
         provider: AIProvider | None = None
+        hive: HiveResources | None = None
         application.state.database = database
 
         try:
@@ -41,22 +46,29 @@ def create_app(
                 resolved_settings,
                 prompt_path,
             )
+            hive = hive_factory(resolved_settings)
+            application.state.hive = hive
             yield
         finally:
             try:
-                if provider is not None:
-                    await provider.aclose()
+                if hive is not None:
+                    await hive.aclose()
             finally:
                 try:
-                    await database.dispose()
+                    if provider is not None:
+                        await provider.aclose()
                 finally:
-                    for state_name in (
-                        "database",
-                        "ai_provider",
-                        "prompt_builder",
-                    ):
-                        if hasattr(application.state, state_name):
-                            delattr(application.state, state_name)
+                    try:
+                        await database.dispose()
+                    finally:
+                        for state_name in (
+                            "database",
+                            "ai_provider",
+                            "prompt_builder",
+                            "hive",
+                        ):
+                            if hasattr(application.state, state_name):
+                                delattr(application.state, state_name)
 
     application = FastAPI(
         title="JARVIS Core",
@@ -69,6 +81,7 @@ def create_app(
         MemoryNotFoundError,
         memory_not_found_handler,
     )
+    application.add_exception_handler(DeviceError, device_error_handler)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,

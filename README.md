@@ -10,7 +10,9 @@ used by JARVIS clients and device agents.
 - Gemini AI provider integration
 - Prompt and runtime-context construction
 - Long-term memory backed by PostgreSQL
-- FastAPI endpoints for chat, health, and memory management
+- Device pairing, registration, and real-time command routing
+- A server-side capability registry for `open_app`, `files`, and `system`
+- FastAPI HTTP and WebSocket interfaces
 - Environment-based configuration
 - Unit, API, database-integration, and live-provider tests
 
@@ -26,10 +28,10 @@ applications that communicate with the Core through explicit APIs.
 ```text
 app/
   api/              FastAPI routes, schemas, and dependency wiring
-  application/      Provider-independent use cases and prompt construction
+  application/      Provider-independent use cases and orchestration
   core/             Application configuration
-  domain/           AI and memory contracts
-  infrastructure/   Database repositories and AI provider adapters
+  domain/           AI, memory, device, and security contracts
+  infrastructure/   Database, provider, and in-memory gateway adapters
   prompts/          System prompt resources
 migrations/         Alembic environment and versioned schema changes
 scripts/            Operational utilities
@@ -92,9 +94,11 @@ business behavior, while `api` and `infrastructure` provide external adapters.
 ## Application composition
 
 `app.main.create_app()` is the composition root. It resolves configuration once,
-then the FastAPI lifespan creates one database engine, AI provider client, and
-prompt builder for that application instance. Request dependencies borrow those
-shared resources, while shutdown closes the provider and database reliably.
+then the FastAPI lifespan creates one database engine, AI provider client,
+prompt builder, device registry, identity store, pairing service, capability
+registry, and connection manager for that application instance. Request
+dependencies borrow those shared resources, while shutdown closes live device
+sockets before the provider and database.
 Memory and chat routes call application services and domain contracts; only the
 dependency-composition layer constructs SQLAlchemy adapters.
 
@@ -161,6 +165,11 @@ Important `.env` settings include:
 - `JARVIS_GEMINI_API_KEY`
 - `JARVIS_GEMINI_MODEL`
 - `JARVIS_CORS_ORIGINS`
+- `JARVIS_DEVICE_ADMIN_TOKEN`
+- `JARVIS_DEVICE_PAIRING_TTL_SECONDS`
+- `JARVIS_DEVICE_HEARTBEAT_INTERVAL_SECONDS`
+- `JARVIS_DEVICE_COMMAND_TIMEOUT_SECONDS`
+- `JARVIS_DEVICE_MAX_MESSAGE_BYTES`
 - `RUN_DB_TESTS`
 - `RUN_LIVE_AI_TESTS`
 
@@ -173,9 +182,61 @@ Use [.env.example](.env.example) as the configuration template.
 - `GET /api/v1/memories`
 - `PUT /api/v1/memories`
 - `DELETE /api/v1/memories/{category}/{key}`
+- `POST /api/v1/devices/pairings`
+- `POST /api/v1/devices/pair`
+- `GET /api/v1/devices`
+- `GET /api/v1/devices/capabilities`
+- `GET /api/v1/devices/{device_id}`
+- `DELETE /api/v1/devices/{device_id}`
+- `POST /api/v1/devices/{device_id}/commands`
+- `WS /api/v1/devices/ws`
 
 Deleting an existing memory returns `204 No Content`; deleting a missing memory
 returns `404 Not Found`.
+
+## Device gateway
+
+The first Hive path is now executable end to end:
+
+```text
+JARVIS Core -> Device Gateway -> WebSocket -> JARVIS Agent -> Capability Registry -> {open_app, files, system}
+```
+
+An operator first creates a one-time pairing challenge with the protected
+`POST /api/v1/devices/pairings` endpoint. The challenge fixes the device's server-side
+capability grants. The Agent claims it once through
+`POST /api/v1/devices/pair` and
+receives an opaque `jv1` device credential. Pairing secrets and device
+credentials are displayed only in those responses, use `Cache-Control:
+no-store`, and are retained by Core only as keyed HMAC-SHA256 digests.
+
+Operator endpoints require this header, backed by a random token of at least 32
+characters in `JARVIS_DEVICE_ADMIN_TOKEN`:
+
+```http
+Authorization: Bearer <device-admin-token>
+```
+
+Agents connect to `WS /api/v1/devices/ws` with the exact
+`jarvis-device.v1` WebSocket subprotocol and their device credential in the
+`Authorization` header. Credentials are never accepted in URLs. After Core's
+`server.hello`, the Agent sends `device.hello`; Core computes effective
+capabilities as the intersection of the Agent's advertisement and the
+operator's grants, then replies with `server.ready`. Commands and results use
+strict, versioned JSON envelopes and are correlated by device, session, and
+command IDs. Frames are text-only and capped at 64 KiB by default.
+
+Use HTTPS/WSS outside local development, and store the Agent credential in an
+OS keychain or an ACL-restricted file. Capability grants are necessary but not
+sufficient: the Agent must independently enforce app, path, and action
+allowlists. Core never sends raw shell code. The initial capability/action
+registry permits `open_app.open`, `files.{list,read,write}`, and
+`system.{get_info,get_status}`.
+
+Device registration, credentials, and presence are process-local in this
+milestone, so they reset when Core restarts. Run a single Core worker until a
+persistent registry and shared message broker replace these adapters; multiple
+workers cannot safely route a command to a process-local WebSocket.
 
 ## Tests
 
@@ -221,8 +282,10 @@ libraries. Those dependencies belong in `app/api` or `app/infrastructure`.
 
 ## Planned capabilities
 
-- Device registration and real-time connections
-- Tool execution with explicit permissions
+- Persistent device identities and pairing audit history
+- Shared device routing through a message broker
+- Signed or mutual-TLS device identities
+- Agent-side app, path, and system-action policy adapters
 - Tasks, reminders, and notifications
 - Conversation persistence and summarization
 - Additional AI providers
