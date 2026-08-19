@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -19,7 +19,9 @@ class FakeProvider(AIProvider):
 
     async def complete(self, request: AIRequest) -> AIResponse:
         assert "Favorite Editor: VS Code" in request.system_prompt
-        return AIResponse(text=f"received:{request.user_message}", provider=self.name, model="fake-1")
+        return AIResponse(
+            text=f"received:{request.user_message}", provider=self.name, model="fake-1"
+        )
 
 
 class FakeMemoryRepository(MemoryRepository):
@@ -29,7 +31,7 @@ class FakeMemoryRepository(MemoryRepository):
                 MemoryCategory.PREFERENCES,
                 "favorite_editor",
                 "VS Code",
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
             )
         ]
 

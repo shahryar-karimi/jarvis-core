@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import hmac
 import secrets
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from app.domain.devices import Device, DeviceCapability, DeviceRegistry
@@ -16,7 +16,6 @@ from app.domain.security import (
     DevicePairingChallenge,
 )
 from app.infrastructure.security.credentials import DeviceCredentialCodec
-
 
 Clock = Callable[[], datetime]
 IdFactory = Callable[[], UUID]
@@ -119,7 +118,7 @@ class InMemoryDevicePairing(DevicePairing):
             raise ValueError("pairing digest key must contain at least 32 bytes")
         self._devices = devices
         self._identities = identities
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._digest_key = digest_key or secrets.token_bytes(32)
         self._id_factory = id_factory
         self._token_factory = token_factory or (lambda: secrets.token_urlsafe(32))

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 from fastapi import FastAPI
@@ -20,7 +20,6 @@ from app.core.config import Settings
 from app.domain.ai import AICapability, AIProvider, AIRequest, AIResponse
 from app.domain.memory import MemoryCategory, MemoryEntry, MemoryRepository
 from app.main import create_app
-
 
 OWNER_TOKEN = "test-owner-token-with-enough-entropy"
 OWNER_HEADERS = {"authorization": f"Bearer {OWNER_TOKEN}"}
@@ -80,7 +79,7 @@ class FakeMemoryRepository(MemoryRepository):
             category=category,
             key=key,
             value=value,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
         )
         self._entries[(category, key)] = entry
         return entry

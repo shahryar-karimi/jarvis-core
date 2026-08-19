@@ -11,7 +11,6 @@ from app.api.device_dependencies import get_capability_registry
 from app.core.config import Settings
 from app.main import create_app
 
-
 DEVICE_ADMIN_TOKEN = "test-device-admin-token-with-enough-entropy"
 
 
@@ -99,9 +98,7 @@ async def test_unconfigured_owner_auth_fails_closed_but_health_stays_public(
         health = await client.get("/api/v1/health")
 
     assert protected.status_code == 503
-    assert protected.json() == {
-        "detail": "Owner API authentication is not configured."
-    }
+    assert protected.json() == {"detail": "Owner API authentication is not configured."}
     assert health.status_code == 200
 
 
@@ -208,9 +205,7 @@ def test_openapi_distinguishes_owner_and_device_admin_security(app) -> None:
         ("/api/v1/devices/{device_id}/commands", "post"),
     ]
     for path, method in device_admin_operations:
-        assert schema["paths"][path][method]["security"] == [
-            {"DeviceAdminBearer": []}
-        ]
+        assert schema["paths"][path][method]["security"] == [{"DeviceAdminBearer": []}]
 
     assert "security" not in schema["paths"]["/api/v1/health"]["get"]
     assert "security" not in schema["paths"]["/api/v1/health/ready"]["get"]
@@ -260,10 +255,6 @@ def test_every_http_operation_has_an_explicit_security_policy(app) -> None:
     for path, method in expected_public:
         assert "security" not in schema["paths"][path][method]
     for path, method in expected_owner:
-        assert schema["paths"][path][method]["security"] == [
-            {"OwnerBearer": []}
-        ]
+        assert schema["paths"][path][method]["security"] == [{"OwnerBearer": []}]
     for path, method in expected_device_admin:
-        assert schema["paths"][path][method]["security"] == [
-            {"DeviceAdminBearer": []}
-        ]
+        assert schema["paths"][path][method]["security"] == [{"DeviceAdminBearer": []}]

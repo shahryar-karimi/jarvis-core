@@ -3,16 +3,15 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-import pytest
 from starlette.testclient import WebSocketDenialResponse
 
 from app.core.config import Settings
 from app.main import create_app
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEVICE_ADMIN_TOKEN = "restart-test-device-admin-with-enough-entropy"

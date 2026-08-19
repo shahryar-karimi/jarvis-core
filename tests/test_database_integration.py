@@ -38,16 +38,13 @@ from app.infrastructure.security import (
     SqlAlchemyDevicePairing,
 )
 
-
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def require_database_tests(external_test_settings) -> None:
     if not external_test_settings.run_db_tests:
-        pytest.skip(
-            "Set RUN_DB_TESTS=1 in .env to test the configured PostgreSQL database"
-        )
+        pytest.skip("Set RUN_DB_TESTS=1 in .env to test the configured PostgreSQL database")
 
 
 @pytest.mark.asyncio
@@ -67,16 +64,8 @@ async def test_postgres_is_migrated_to_the_expected_schema(
                 return (
                     set(schema.get_table_names()),
                     {item["name"] for item in schema.get_indexes("memories")},
-                    {
-                        item["name"]
-                        for item in schema.get_unique_constraints("memories")
-                    },
-                    {
-                        item["name"]
-                        for item in schema.get_unique_constraints(
-                            "device_credentials"
-                        )
-                    },
+                    {item["name"] for item in schema.get_unique_constraints("memories")},
+                    {item["name"] for item in schema.get_unique_constraints("device_credentials")},
                 )
 
             (
@@ -87,9 +76,7 @@ async def test_postgres_is_migrated_to_the_expected_schema(
             ) = await connection.run_sync(inspect_schema)
             revisions = set(
                 (
-                    await connection.execute(
-                        text("SELECT version_num FROM alembic_version")
-                    )
+                    await connection.execute(text("SELECT version_num FROM alembic_version"))
                 ).scalars()
             )
 
@@ -98,12 +85,8 @@ async def test_postgres_is_migrated_to_the_expected_schema(
         assert "device_credentials" in table_names
         assert "ix_memories_category" in index_names
         assert "uq_memory_category_key" in constraint_names
-        assert credential_constraint_names == {
-            "uq_device_credentials_device_id"
-        }
-        migration_scripts = ScriptDirectory.from_config(
-            Config(PROJECT_ROOT / "alembic.ini")
-        )
+        assert credential_constraint_names == {"uq_device_credentials_device_id"}
+        migration_scripts = ScriptDirectory.from_config(Config(PROJECT_ROOT / "alembic.ini"))
         assert revisions == set(migration_scripts.get_heads())
     finally:
         await database.dispose()
@@ -134,9 +117,7 @@ async def test_fresh_postgres_migration_supports_atomic_persistence(
         database_created = True
 
         migration_config = Config(PROJECT_ROOT / "alembic.ini")
-        migration_config.attributes["database_url"] = test_url.render_as_string(
-            hide_password=False
-        )
+        migration_config.attributes["database_url"] = test_url.render_as_string(hide_password=False)
         await asyncio.to_thread(command.upgrade, migration_config, "head")
 
         database = Database(test_url.render_as_string(hide_password=False))
@@ -172,19 +153,11 @@ async def test_fresh_postgres_migration_supports_atomic_persistence(
                 *(write_concurrently(value) for value in concurrent_values),
                 return_exceptions=True,
             )
-            failures = [
-                outcome
-                for outcome in outcomes
-                if isinstance(outcome, BaseException)
-            ]
+            failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
             assert failures == []
             assert len(session_ids) == len(concurrent_values)
-            concurrent_results = [
-                cast(MemoryEntry, outcome) for outcome in outcomes
-            ]
-            assert {entry.value for entry in concurrent_results} == set(
-                concurrent_values
-            )
+            concurrent_results = [cast(MemoryEntry, outcome) for outcome in outcomes]
+            assert {entry.value for entry in concurrent_results} == set(concurrent_values)
 
             async with database.session_factory() as session:
                 repository = SqlAlchemyMemoryRepository(session)
@@ -200,14 +173,10 @@ async def test_fresh_postgres_migration_supports_atomic_persistence(
             async with database.engine.connect() as connection:
                 revisions = set(
                     (
-                        await connection.execute(
-                            text("SELECT version_num FROM alembic_version")
-                        )
+                        await connection.execute(text("SELECT version_num FROM alembic_version"))
                     ).scalars()
                 )
-            migration_scripts = ScriptDirectory.from_config(
-                Config(PROJECT_ROOT / "alembic.ini")
-            )
+            migration_scripts = ScriptDirectory.from_config(Config(PROJECT_ROOT / "alembic.ini"))
             assert revisions == set(migration_scripts.get_heads())
 
             identity = SqlAlchemyDeviceIdentity(
@@ -233,23 +202,13 @@ async def test_fresh_postgres_migration_supports_atomic_persistence(
                 database.session_factory,
                 DeviceCredentialCodec(b"postgres-integration-device-digest-key"),
             )
-            restarted_registry = SqlAlchemyDeviceRegistry(
-                database.session_factory
-            )
-            assert await restarted_identity.authenticate(credential.token) == (
-                credential.device.id
-            )
-            assert await restarted_registry.get(credential.device.id) == (
-                credential.device
-            )
+            restarted_registry = SqlAlchemyDeviceRegistry(database.session_factory)
+            assert await restarted_identity.authenticate(credential.token) == (credential.device.id)
+            assert await restarted_registry.get(credential.device.id) == (credential.device)
 
-            rotated_token = await restarted_identity.issue(
-                credential.device.id
-            )
+            rotated_token = await restarted_identity.issue(credential.device.id)
             assert await restarted_identity.authenticate(credential.token) is None
-            assert await restarted_identity.authenticate(rotated_token) == (
-                credential.device.id
-            )
+            assert await restarted_identity.authenticate(rotated_token) == (credential.device.id)
             async with database.session_factory() as session:
                 credential_count = await session.scalar(
                     select(func.count()).select_from(DeviceCredentialRecord)
@@ -264,8 +223,6 @@ async def test_fresh_postgres_migration_supports_atomic_persistence(
         try:
             if database_created:
                 async with admin_engine.connect() as connection:
-                    await connection.execute(
-                        text(f'DROP DATABASE "{database_name}" WITH (FORCE)')
-                    )
+                    await connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
         finally:
             await admin_engine.dispose()

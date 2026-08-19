@@ -7,7 +7,6 @@ from app.api.schemas import MemoryResponse, MemoryUpsertRequest
 from app.application.memory_service import MemoryService
 from app.domain.memory import MemoryCategory
 
-
 router = APIRouter(prefix="/memories", tags=["memory"])
 MemoryServiceDep = Annotated[MemoryService, Depends(get_memory_service)]
 

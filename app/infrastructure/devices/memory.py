@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable, Collection
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.domain.devices import (
@@ -24,7 +24,6 @@ from app.domain.devices import (
     DeviceStatus,
     DeviceTransport,
 )
-
 
 Clock = Callable[[], datetime]
 
@@ -48,8 +47,7 @@ class InMemoryCapabilityRegistry(CapabilityRegistry):
             ),
         )
         self._definitions = {
-            definition.capability: deepcopy(definition)
-            for definition in configured
+            definition.capability: deepcopy(definition) for definition in configured
         }
 
     async def list_all(self) -> list[CapabilityDefinition]:
@@ -127,7 +125,7 @@ class InMemoryDeviceConnectionManager(DeviceConnectionManager):
     REPLACED_CLOSE_CODE = 4409
 
     def __init__(self, *, clock: Clock | None = None) -> None:
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._connections: dict[UUID, _LiveConnection] = {}
         self._pending: dict[UUID, _PendingCommand] = {}
         self._lock = asyncio.Lock()
@@ -166,15 +164,11 @@ class InMemoryDeviceConnectionManager(DeviceConnectionManager):
         effective_capabilities: frozenset[DeviceCapability],
     ) -> None:
         if not effective_capabilities <= advertised_capabilities:
-            raise ValueError(
-                "effective capabilities must be advertised by the device"
-            )
+            raise ValueError("effective capabilities must be advertised by the device")
         async with self._lock:
             connection = self._current(device_id, session_id)
             connection.status = DeviceStatus.ONLINE
-            connection.advertised_capabilities = frozenset(
-                advertised_capabilities
-            )
+            connection.advertised_capabilities = frozenset(advertised_capabilities)
             connection.effective_capabilities = frozenset(effective_capabilities)
             connection.last_seen_at = self._clock()
 
@@ -236,9 +230,7 @@ class InMemoryDeviceConnectionManager(DeviceConnectionManager):
         deadline_seconds = (command.deadline_at - self._clock()).total_seconds()
         if deadline_seconds <= 0:
             raise DeviceCommandTimeoutError(command.id)
-        future: asyncio.Future[DeviceCommandResult] = (
-            asyncio.get_running_loop().create_future()
-        )
+        future: asyncio.Future[DeviceCommandResult] = asyncio.get_running_loop().create_future()
         async with self._lock:
             connection = self._connections.get(command.device_id)
             if connection is None or connection.status is not DeviceStatus.ONLINE:

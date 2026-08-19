@@ -5,7 +5,6 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -44,12 +43,10 @@ def test_initial_migration_upgrades_an_empty_database_and_is_reversible(
             "value",
             "updated_at",
         ]
-        assert {item["name"] for item in schema.get_indexes("memories")} == {
-            "ix_memories_category"
+        assert {item["name"] for item in schema.get_indexes("memories")} == {"ix_memories_category"}
+        assert {item["name"] for item in schema.get_unique_constraints("memories")} == {
+            "uq_memory_category_key"
         }
-        assert {
-            item["name"] for item in schema.get_unique_constraints("memories")
-        } == {"uq_memory_category_key"}
         assert [column["name"] for column in schema.get_columns("devices")] == [
             "id",
             "name",
@@ -57,19 +54,15 @@ def test_initial_migration_upgrades_an_empty_database_and_is_reversible(
             "paired_at",
             "revoked_at",
         ]
-        assert [
-            column["name"]
-            for column in schema.get_columns("device_credentials")
-        ] == [
+        assert [column["name"] for column in schema.get_columns("device_credentials")] == [
             "id",
             "device_id",
             "token_digest",
             "created_at",
         ]
-        assert {
-            item["name"]
-            for item in schema.get_unique_constraints("device_credentials")
-        } == {"uq_device_credentials_device_id"}
+        assert {item["name"] for item in schema.get_unique_constraints("device_credentials")} == {
+            "uq_device_credentials_device_id"
+        }
         assert schema.get_foreign_keys("device_credentials") == [
             {
                 "name": "fk_device_credentials_device_id_devices",
@@ -82,9 +75,10 @@ def test_initial_migration_upgrades_an_empty_database_and_is_reversible(
         ]
 
         with engine.connect() as connection:
-            assert connection.scalar(
-                text("SELECT version_num FROM alembic_version")
-            ) == "0002_persist_devices"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version"))
+                == "0002_persist_devices"
+            )
     finally:
         engine.dispose()
 
@@ -98,9 +92,10 @@ def test_initial_migration_upgrades_an_empty_database_and_is_reversible(
         assert "devices" not in table_names
         assert "memories" in table_names
         with engine.connect() as connection:
-            assert connection.scalar(
-                text("SELECT version_num FROM alembic_version")
-            ) == "0001_create_memories"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version"))
+                == "0001_create_memories"
+            )
     finally:
         engine.dispose()
 

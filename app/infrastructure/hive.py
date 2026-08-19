@@ -4,7 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.application.devices import DeviceService
 from app.core.config import Settings
-from app.domain.devices import CapabilityRegistry, DeviceConnectionManager, DeviceRegistry
+from app.domain.devices import (
+    CapabilityRegistry,
+    DeviceConnectionManager,
+    DeviceRegistry,
+)
 from app.domain.security import DeviceIdentity, DevicePairing
 from app.infrastructure.devices import (
     InMemoryCapabilityRegistry,
@@ -19,7 +23,6 @@ from app.infrastructure.security import (
     SqlAlchemyDeviceIdentity,
     SqlAlchemyDevicePairing,
 )
-
 
 SessionFactory = async_sessionmaker[AsyncSession]
 _PLACEHOLDER_DIGEST_KEYS = {
@@ -110,10 +113,7 @@ def _credential_digest_key(settings: Settings) -> bytes:
     configured = settings.device_credential_digest_key
     raw_value = configured.get_secret_value().strip() if configured else ""
     encoded = raw_value.encode("utf-8")
-    if (
-        len(encoded) < 32
-        or raw_value.casefold() in _PLACEHOLDER_DIGEST_KEYS
-    ):
+    if len(encoded) < 32 or raw_value.casefold() in _PLACEHOLDER_DIGEST_KEYS:
         raise RuntimeError(
             "Device credential persistence requires "
             "JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY with at least 32 bytes."

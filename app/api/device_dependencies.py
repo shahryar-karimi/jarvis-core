@@ -9,7 +9,6 @@ from app.core.config import Settings
 from app.domain.devices import CapabilityRegistry
 from app.infrastructure.hive import HiveResources
 
-
 _admin_bearer = HTTPBearer(
     auto_error=False,
     scheme_name="DeviceAdminBearer",

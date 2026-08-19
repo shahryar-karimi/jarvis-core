@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -57,7 +57,7 @@ class DeviceService:
         self._capability_registry = capability_registry
         self._pairing_ttl = timedelta(seconds=pairing_ttl_seconds)
         self._command_timeout_seconds = command_timeout_seconds
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory
         self._lifecycle_lock = asyncio.Lock()
 

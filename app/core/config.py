@@ -5,7 +5,6 @@ from urllib.parse import unquote, urlsplit
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _PLACEHOLDER_SECRETS = {
     "change-me",
     "replace-me",
@@ -27,9 +26,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    environment: Literal["development", "test", "staging", "production"] = (
-        "development"
-    )
+    environment: Literal["development", "test", "staging", "production"] = "development"
     api_prefix: str = "/api/v1"
     assistant_name: str = "JARVIS"
     user_name: str = ""
@@ -87,14 +84,10 @@ def validate_runtime_settings(settings: Settings) -> None:
         ("JARVIS_DEVICE_ADMIN_TOKEN", admin_token),
     ):
         if not _is_strong_bearer_secret(value):
-            problems.append(
-                f"{variable_name} must contain at least 32 ASCII characters"
-            )
+            problems.append(f"{variable_name} must contain at least 32 ASCII characters")
 
     if not _is_strong_secret(digest_key):
-        problems.append(
-            "JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY must contain at least 32 bytes"
-        )
+        problems.append("JARVIS_DEVICE_CREDENTIAL_DIGEST_KEY must contain at least 32 bytes")
 
     provider_name = settings.ai_provider.strip().casefold()
     gemini_api_key = (settings.gemini_api_key or "").strip()
@@ -132,24 +125,17 @@ def validate_runtime_settings(settings: Settings) -> None:
         problems.append("all production credentials and secret keys must differ")
 
     if not settings.trusted_hosts or any(
-        not host.strip()
-        or host.strip() == "*"
-        or "://" in host
-        or "/" in host
+        not host.strip() or host.strip() == "*" or "://" in host or "/" in host
         for host in settings.trusted_hosts
     ):
         problems.append("JARVIS_TRUSTED_HOSTS must explicitly list allowed hosts")
 
     if any(not _is_secure_exact_origin(origin) for origin in settings.cors_origins):
-        problems.append(
-            "JARVIS_CORS_ORIGINS must contain only exact HTTPS origins"
-        )
+        problems.append("JARVIS_CORS_ORIGINS must contain only exact HTTPS origins")
 
     if problems:
         joined = "; ".join(problems)
-        raise ProductionConfigurationError(
-            f"Unsafe production configuration: {joined}."
-        )
+        raise ProductionConfigurationError(f"Unsafe production configuration: {joined}.")
 
 
 def _secret_value(secret: SecretStr | None) -> str:

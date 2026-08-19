@@ -9,7 +9,6 @@ from httpx import ASGITransport, AsyncClient
 from app.core.config import Settings
 from app.main import create_app
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -56,9 +55,7 @@ async def test_routes_use_lifespan_owned_resources_without_overrides(
         assert chat_response.status_code == 200
         assert chat_response.json()["provider"] == "fake"
         assert len(fake_provider.requests) == 1
-        assert "Favorite Editor: PyCharm" in (
-            fake_provider.requests[0].system_prompt
-        )
+        assert "Favorite Editor: PyCharm" in (fake_provider.requests[0].system_prompt)
 
     assert not application.dependency_overrides
     assert not hasattr(application.state, "database")

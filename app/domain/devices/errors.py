@@ -39,10 +39,7 @@ class DeviceCapabilityUnavailableError(DeviceError):
     def __init__(self, device_id: UUID, capability: DeviceCapability) -> None:
         self.device_id = device_id
         self.capability = capability
-        super().__init__(
-            f"Device '{device_id}' cannot execute capability "
-            f"'{capability.value}'."
-        )
+        super().__init__(f"Device '{device_id}' cannot execute capability '{capability.value}'.")
 
 
 class DeviceActionUnavailableError(DeviceError):
@@ -50,8 +47,7 @@ class DeviceActionUnavailableError(DeviceError):
         self.capability = capability
         self.action = action
         super().__init__(
-            f"Action '{action}' is not registered for capability "
-            f"'{capability.value}'."
+            f"Action '{action}' is not registered for capability '{capability.value}'."
         )
 
 

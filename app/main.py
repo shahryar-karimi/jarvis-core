@@ -18,7 +18,6 @@ from app.infrastructure.ai.factory import create_ai_provider
 from app.infrastructure.database import Database
 from app.infrastructure.hive import HiveResources, create_hive_resources
 
-
 DatabaseFactory = Callable[[str], Database]
 AIProviderFactory = Callable[[Settings], AIProvider]
 HiveFactory = Callable[

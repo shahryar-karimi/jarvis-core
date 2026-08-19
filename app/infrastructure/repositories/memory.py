@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, String, Text, UniqueConstraint, delete, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -12,9 +12,7 @@ from app.infrastructure.database import Base
 
 class MemoryRecord(Base):
     __tablename__ = "memories"
-    __table_args__ = (
-        UniqueConstraint("category", "key", name="uq_memory_category_key"),
-    )
+    __table_args__ = (UniqueConstraint("category", "key", name="uq_memory_category_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -40,7 +38,7 @@ class SqlAlchemyMemoryRepository(MemoryRepository):
     ) -> MemoryEntry:
         """Insert or update one composite key in a single database statement."""
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         values = {
             "category": category.value,
             "key": key,
@@ -53,9 +51,7 @@ class SqlAlchemyMemoryRepository(MemoryRepository):
         elif dialect_name == "sqlite":
             insert_statement = sqlite_insert(MemoryRecord).values(**values)
         else:
-            raise RuntimeError(
-                f"Atomic memory upsert is not implemented for '{dialect_name}'."
-            )
+            raise RuntimeError(f"Atomic memory upsert is not implemented for '{dialect_name}'.")
 
         upsert_statement = insert_statement.on_conflict_do_update(
             index_elements=[MemoryRecord.category, MemoryRecord.key],

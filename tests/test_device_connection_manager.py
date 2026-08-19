@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -19,8 +19,7 @@ from app.domain.devices import (
 )
 from app.infrastructure.devices import InMemoryDeviceConnectionManager
 
-
-NOW = datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
 DEVICE_ID = UUID("60000000-0000-0000-0000-000000000006")
 OTHER_DEVICE_ID = UUID("70000000-0000-0000-0000-000000000007")
 COMMAND_ID = UUID("80000000-0000-0000-0000-000000000008")
@@ -93,9 +92,7 @@ async def test_activation_limits_dispatch_and_result_correlation() -> None:
     assert online.advertised_capabilities == frozenset(
         {DeviceCapability.OPEN_APP, DeviceCapability.SYSTEM}
     )
-    assert online.effective_capabilities == frozenset(
-        {DeviceCapability.OPEN_APP}
-    )
+    assert online.effective_capabilities == frozenset({DeviceCapability.OPEN_APP})
 
     unavailable = make_command(DeviceCapability.SYSTEM)
     with pytest.raises(DeviceCapabilityUnavailableError):
@@ -200,9 +197,7 @@ async def test_shutdown_closes_transport_and_fails_pending_command() -> None:
         frozenset({DeviceCapability.OPEN_APP}),
         frozenset({DeviceCapability.OPEN_APP}),
     )
-    execution = asyncio.create_task(
-        manager.execute(make_command(), timeout_seconds=1)
-    )
+    execution = asyncio.create_task(manager.execute(make_command(), timeout_seconds=1))
     await asyncio.wait_for(transport.command_sent.wait(), timeout=0.5)
 
     await manager.close_all()

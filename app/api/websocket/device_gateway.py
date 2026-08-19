@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
-from contextlib import suppress
 import json
 import logging
+from collections import deque
+from contextlib import suppress
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -19,8 +19,8 @@ from app.api.websocket.protocol import (
     CLOSE_PROTOCOL_ERROR,
     CLOSE_TIMEOUT,
     CLOSE_UNSUPPORTED_DATA,
-    DEVICE_SUBPROTOCOL,
     DEVICE_HELLO_TIMEOUT_SECONDS,
+    DEVICE_SUBPROTOCOL,
     HANDSHAKE_REJECTION_STATUS,
     MAX_CLOSE_REASON_BYTES,
     MESSAGE_REPLAY_WINDOW,
@@ -36,12 +36,10 @@ from app.api.websocket.protocol import (
 from app.application.devices import (
     CommandResultRejectedError,
     DeviceAuthenticationError,
-    DeviceService,
 )
 from app.core.config import Settings
 from app.domain.devices import DeviceCommand, DeviceError, DeviceTransport
 from app.infrastructure.hive import HiveResources
-
 
 router = APIRouter(prefix="/devices", tags=["device gateway"])
 logger = logging.getLogger(__name__)
@@ -86,9 +84,7 @@ class WebSocketDeviceTransport(DeviceTransport):
         async with self._send_lock:
             if self._closed:
                 raise RuntimeError("device transport is closed")
-            await self._websocket.send_json(
-                server_message(message_type, session_id, payload)
-            )
+            await self._websocket.send_json(server_message(message_type, session_id, payload))
 
     async def close(self, code: int, reason: str) -> None:
         async with self._send_lock:
@@ -140,9 +136,7 @@ async def device_gateway(websocket: WebSocket) -> None:
             session_id,
             {
                 "device_id": str(device.id),
-                "heartbeat_interval_seconds": (
-                    settings.device_heartbeat_interval_seconds
-                ),
+                "heartbeat_interval_seconds": (settings.device_heartbeat_interval_seconds),
                 "max_message_bytes": settings.device_max_message_bytes,
             },
         )
@@ -174,9 +168,7 @@ async def device_gateway(websocket: WebSocket) -> None:
             session_id,
             {
                 "device_id": str(device.id),
-                "effective_capabilities": sorted(
-                    capability.value for capability in effective
-                ),
+                "effective_capabilities": sorted(capability.value for capability in effective),
             },
         )
 

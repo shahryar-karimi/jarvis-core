@@ -5,7 +5,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection, URL
+from sqlalchemy.engine import URL, Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
@@ -15,7 +15,6 @@ from app.infrastructure.repositories.devices import (  # noqa: F401
     DeviceRecord,
 )
 from app.infrastructure.repositories.memory import MemoryRecord  # noqa: F401
-
 
 config = context.config
 

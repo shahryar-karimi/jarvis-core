@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -76,7 +75,7 @@ def test_database_roles_and_release_images_are_explicit() -> None:
     assert "postgres-entrypoint-wrapper.sh" in compose_text
     assert "10-bootstrap-jarvis-role.sh" in compose_text
 
-    bootstrap = (PROJECT_ROOT / "deploy/postgres/10-bootstrap-jarvis-role.sh")
+    bootstrap = PROJECT_ROOT / "deploy/postgres/10-bootstrap-jarvis-role.sh"
     bootstrap_text = bootstrap.read_text(encoding="utf-8")
     assert "NOSUPERUSER" in bootstrap_text
     assert "NOCREATEDB" in bootstrap_text
@@ -100,8 +99,7 @@ def test_container_and_proxy_freeze_production_safety_contracts() -> None:
 
     assert (
         "python:3.12.13-slim-bookworm@sha256:"
-        "4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2"
-        in dockerfile
+        "4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2" in dockerfile
     )
     assert dockerfile.startswith(
         "# syntax=docker/dockerfile:1@sha256:"

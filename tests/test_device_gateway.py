@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,7 +15,6 @@ from starlette.websockets import WebSocketDisconnect
 from app.core.config import Settings
 from app.infrastructure.hive import create_in_memory_hive_resources
 from app.main import create_app
-
 
 ADMIN_TOKEN = "test-device-admin-token-with-enough-entropy"
 ADMIN_HEADERS = {"authorization": f"Bearer {ADMIN_TOKEN}"}
@@ -182,9 +181,7 @@ def test_gateway_pair_connect_execute_result_and_cleanup(
             )
             assert online_response.status_code == 200
             assert online_response.json()["status"] == "online"
-            assert online_response.json()["available_capabilities"] == [
-                "open_app"
-            ]
+            assert online_response.json()["available_capabilities"] == ["open_app"]
 
             unsupported = client.post(
                 f"/api/v1/devices/{device_id}/commands",
@@ -353,15 +350,9 @@ def test_gateway_rejects_replays_and_wrong_sessions(
                 {
                     "v": 1,
                     "type": "capabilities.update",
-                    "message_id": (
-                        hello["message_id"]
-                        if violation == "replay"
-                        else str(uuid4())
-                    ),
+                    "message_id": (hello["message_id"] if violation == "replay" else str(uuid4())),
                     "session_id": (
-                        str(uuid4())
-                        if violation == "wrong_session"
-                        else server_hello["session_id"]
+                        str(uuid4()) if violation == "wrong_session" else server_hello["session_id"]
                     ),
                     "payload": {"capabilities": ["open_app"]},
                 }
@@ -567,9 +558,7 @@ def test_revoking_an_online_device_closes_its_active_session(
             subprotocols=[DEVICE_PROTOCOL],
         ) as websocket:
             server_hello = websocket.receive_json()
-            websocket.send_json(
-                hello_message(server_hello["session_id"], ["open_app"])
-            )
+            websocket.send_json(hello_message(server_hello["session_id"], ["open_app"]))
             assert websocket.receive_json()["type"] == "server.ready"
 
             revoked = client.delete(

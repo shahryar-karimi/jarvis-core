@@ -18,7 +18,6 @@ from app.api.device_schemas import (
     PairingResponse,
 )
 
-
 router = APIRouter(prefix="/devices", tags=["devices"])
 
 
@@ -33,9 +32,7 @@ async def create_pairing(
     _: DeviceAdminDep,
     response: Response,
 ) -> PairingResponse:
-    challenge = await service.create_pairing(
-        frozenset(request.granted_capabilities)
-    )
+    challenge = await service.create_pairing(frozenset(request.granted_capabilities))
     response.headers["Cache-Control"] = "no-store"
     return PairingResponse(
         pairing_id=challenge.id,
@@ -72,10 +69,7 @@ async def list_capabilities(
     registry: CapabilityRegistryDep,
     _: DeviceAdminDep,
 ) -> list[CapabilityResponse]:
-    return [
-        CapabilityResponse.from_domain(definition)
-        for definition in await registry.list_all()
-    ]
+    return [CapabilityResponse.from_domain(definition) for definition in await registry.list_all()]
 
 
 @router.get("", response_model=list[DeviceResponse])
@@ -83,10 +77,7 @@ async def list_devices(
     service: DeviceServiceDep,
     _: DeviceAdminDep,
 ) -> list[DeviceResponse]:
-    return [
-        DeviceResponse.from_domain(device)
-        for device in await service.list_devices()
-    ]
+    return [DeviceResponse.from_domain(device) for device in await service.list_devices()]
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)

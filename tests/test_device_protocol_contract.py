@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 import app.api.websocket.protocol as protocol
+from app.api.websocket.device_gateway import _truncate_close_reason
 from app.api.websocket.protocol import (
     CLIENT_MESSAGE_TYPES,
     CLOSE_SESSION_REPLACED,
@@ -39,19 +40,10 @@ from app.infrastructure.devices import (
     InMemoryCapabilityRegistry,
     InMemoryDeviceConnectionManager,
 )
-from app.api.websocket.device_gateway import _truncate_close_reason
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONTRACT_PATH = (
-    PROJECT_ROOT
-    / "docs"
-    / "protocols"
-    / "jarvis-device-v1.contract.json"
-)
-DOCUMENT_PATH = (
-    PROJECT_ROOT / "docs" / "protocols" / "jarvis-device-v1.md"
-)
+CONTRACT_PATH = PROJECT_ROOT / "docs" / "protocols" / "jarvis-device-v1.contract.json"
+DOCUMENT_PATH = PROJECT_ROOT / "docs" / "protocols" / "jarvis-device-v1.md"
 
 MESSAGE_MODELS: dict[str, type[BaseModel]] = {
     "device.hello": DeviceHelloMessage,
@@ -114,18 +106,13 @@ async def test_committed_contract_freezes_protocol_constants_and_actions() -> No
         "max_close_reason_bytes": MAX_CLOSE_REASON_BYTES,
     }
     assert {
-        int(code): meaning
-        for code, meaning in contract["close_codes"].items()
+        int(code): meaning for code, meaning in contract["close_codes"].items()
     } == PROTOCOL_CLOSE_CODES
-    assert (
-        InMemoryDeviceConnectionManager.REPLACED_CLOSE_CODE
-        == CLOSE_SESSION_REPLACED
-    )
+    assert InMemoryDeviceConnectionManager.REPLACED_CLOSE_CODE == CLOSE_SESSION_REPLACED
 
     definitions = await InMemoryCapabilityRegistry().list_all()
     runtime_actions = {
-        definition.capability.value: sorted(definition.actions)
-        for definition in definitions
+        definition.capability.value: sorted(definition.actions) for definition in definitions
     }
     assert runtime_actions == contract["capability_actions"]
 
@@ -147,22 +134,16 @@ def test_committed_contract_freezes_every_closed_message_shape() -> None:
         assert isinstance(payload_model, type)
         assert issubclass(payload_model, BaseModel)
         required = [
-            name
-            for name, field in payload_model.model_fields.items()
-            if field.is_required()
+            name for name, field in payload_model.model_fields.items() if field.is_required()
         ]
         optional = [
-            name
-            for name, field in payload_model.model_fields.items()
-            if not field.is_required()
+            name for name, field in payload_model.model_fields.items() if not field.is_required()
         ]
         assert required == shape["required_payload_fields"]
         assert optional == shape["optional_payload_fields"]
 
         expected_direction = (
-            "agent_to_core"
-            if message_type in CLIENT_MESSAGE_TYPES
-            else "core_to_agent"
+            "agent_to_core" if message_type in CLIENT_MESSAGE_TYPES else "core_to_agent"
         )
         assert shape["direction"] == expected_direction
 
@@ -293,9 +274,7 @@ def test_frozen_cross_field_invariants_are_validated() -> None:
     contract = load_contract()["golden_messages"]
     result = deepcopy(
         next(
-            message
-            for message in contract["agent_to_core"]
-            if message["type"] == "command.result"
+            message for message in contract["agent_to_core"] if message["type"] == "command.result"
         )
     )
     result["payload"]["error"] = "unexpected failure"
@@ -308,9 +287,7 @@ def test_frozen_cross_field_invariants_are_validated() -> None:
 
     command = deepcopy(
         next(
-            message
-            for message in contract["core_to_agent"]
-            if message["type"] == "command.execute"
+            message for message in contract["core_to_agent"] if message["type"] == "command.execute"
         )
     )
     command["payload"]["deadline_at"] = command["payload"]["issued_at"]
@@ -376,9 +353,7 @@ def test_command_and_error_limits_are_frozen() -> None:
     contract = load_contract()["golden_messages"]
     result = deepcopy(
         next(
-            message
-            for message in contract["agent_to_core"]
-            if message["type"] == "command.result"
+            message for message in contract["agent_to_core"] if message["type"] == "command.result"
         )
     )
     result["payload"].update(succeeded=False, error="e" * 2_000)
@@ -389,9 +364,7 @@ def test_command_and_error_limits_are_frozen() -> None:
 
     command = deepcopy(
         next(
-            message
-            for message in contract["core_to_agent"]
-            if message["type"] == "command.execute"
+            message for message in contract["core_to_agent"] if message["type"] == "command.execute"
         )
     )
     command["payload"]["action"] = "a" * 80
@@ -403,9 +376,7 @@ def test_command_and_error_limits_are_frozen() -> None:
 
     protocol_error = deepcopy(
         next(
-            message
-            for message in contract["core_to_agent"]
-            if message["type"] == "protocol.error"
+            message for message in contract["core_to_agent"] if message["type"] == "protocol.error"
         )
     )
     protocol_error["payload"]["detail"] = "d" * 2_000
@@ -419,9 +390,7 @@ def test_protocol_payload_values_remain_json_serializable() -> None:
     contract = load_contract()["golden_messages"]
     result = deepcopy(
         next(
-            message
-            for message in contract["agent_to_core"]
-            if message["type"] == "command.result"
+            message for message in contract["agent_to_core"] if message["type"] == "command.result"
         )
     )
     result["payload"]["output"] = object()
@@ -430,9 +399,7 @@ def test_protocol_payload_values_remain_json_serializable() -> None:
 
     command = deepcopy(
         next(
-            message
-            for message in contract["core_to_agent"]
-            if message["type"] == "command.execute"
+            message for message in contract["core_to_agent"] if message["type"] == "command.execute"
         )
     )
     command["payload"]["arguments"] = {"unsafe": object()}

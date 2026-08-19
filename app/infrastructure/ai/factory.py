@@ -16,6 +16,4 @@ def create_ai_provider(settings: Settings) -> AIProvider:
             )
         return GeminiProvider(settings.gemini_api_key, settings.gemini_model)
 
-    raise AIProviderConfigurationError(
-        f"AI provider '{provider_name}' is not implemented."
-    )
+    raise AIProviderConfigurationError(f"AI provider '{provider_name}' is not implemented.")

@@ -17,7 +17,6 @@ from app.core.config import get_settings
 from app.domain.ai import AIRequest
 from app.infrastructure.ai.gemini import GeminiProvider
 
-
 pytestmark = pytest.mark.live
 
 
@@ -31,9 +30,7 @@ async def test_real_gemini_returns_text(external_test_settings) -> None:
         "replace-me",
         "changeme",
     }:
-        pytest.fail(
-            "RUN_LIVE_AI_TESTS is enabled but JARVIS_GEMINI_API_KEY is not configured"
-        )
+        pytest.fail("RUN_LIVE_AI_TESTS is enabled but JARVIS_GEMINI_API_KEY is not configured")
 
     provider = GeminiProvider(settings.gemini_api_key, settings.gemini_model)
     rejection: str | None = None
@@ -42,16 +39,11 @@ async def test_real_gemini_returns_text(external_test_settings) -> None:
             response = await provider.complete(
                 AIRequest(
                     user_message="Reply with only the word OK.",
-                    system_prompt=(
-                        "You are a connectivity test. Follow the request exactly."
-                    ),
+                    system_prompt=("You are a connectivity test. Follow the request exactly."),
                 )
             )
         except ClientError as error:
-            rejection = (
-                "Gemini request rejected "
-                f"({error.code} {error.status}): {error.message}"
-            )
+            rejection = f"Gemini request rejected ({error.code} {error.status}): {error.message}"
     finally:
         await provider.aclose()
 

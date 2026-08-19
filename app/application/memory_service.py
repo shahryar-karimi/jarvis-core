@@ -5,9 +5,7 @@ class MemoryNotFoundError(LookupError):
     def __init__(self, category: MemoryCategory, key: str) -> None:
         self.category = category
         self.key = key
-        super().__init__(
-            f"Memory '{category.value}/{key}' was not found."
-        )
+        super().__init__(f"Memory '{category.value}/{key}' was not found.")
 
 
 class MemoryService:

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 import hmac
 import secrets
+from collections.abc import Callable
+from dataclasses import dataclass
 from uuid import UUID, uuid4
-
 
 IdFactory = Callable[[], UUID]
 TokenFactory = Callable[[], str]
@@ -18,10 +17,7 @@ class IssuedDeviceCredential:
     digest: bytes
 
     def __repr__(self) -> str:
-        return (
-            "IssuedDeviceCredential("
-            f"id={self.id!r}, token='<redacted>', digest='<redacted>')"
-        )
+        return f"IssuedDeviceCredential(id={self.id!r}, token='<redacted>', digest='<redacted>')"
 
 
 class DeviceCredentialCodec:

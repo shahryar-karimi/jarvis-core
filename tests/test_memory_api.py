@@ -91,9 +91,7 @@ async def test_deleting_a_missing_memory_returns_not_found(
         )
 
     assert response.status_code == 404
-    assert response.json() == {
-        "detail": "Memory 'preferences/missing_key' was not found."
-    }
+    assert response.json() == {"detail": "Memory 'preferences/missing_key' was not found."}
 
 
 @pytest.mark.asyncio
@@ -120,8 +118,6 @@ async def test_unexpected_memory_error_is_not_exposed(
 
 
 def test_memory_delete_documents_not_found_response(app) -> None:
-    delete_operation = app.openapi()["paths"][
-        "/api/v1/memories/{category}/{key}"
-    ]["delete"]
+    delete_operation = app.openapi()["paths"]["/api/v1/memories/{category}/{key}"]["delete"]
 
     assert "404" in delete_operation["responses"]

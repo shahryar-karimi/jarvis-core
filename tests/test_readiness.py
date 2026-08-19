@@ -4,9 +4,9 @@ import asyncio
 import logging
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
-import pytest
 
 from app.application.readiness_service import (
     DatabaseReadiness,
@@ -14,7 +14,6 @@ from app.application.readiness_service import (
 )
 from app.infrastructure.database import Database
 from app.infrastructure.readiness import SqlAlchemyReadinessProbe
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 

@@ -47,11 +47,7 @@ class PromptBuilder:
             if self._settings.user_name
             else "Use a natural form of address appropriate to the user's language."
         )
-        return (
-            "[IDENTITY]\n"
-            f"Your name is {self._settings.assistant_name}.\n"
-            f"{user_line}"
-        )
+        return f"[IDENTITY]\nYour name is {self._settings.assistant_name}.\n{user_line}"
 
     def _memory_context(self, memories: list[MemoryEntry]) -> str:
         if not memories:

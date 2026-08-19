@@ -6,7 +6,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import Settings
 
-
 _owner_bearer = HTTPBearer(
     auto_error=False,
     scheme_name="OwnerBearer",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -13,8 +13,7 @@ from app.infrastructure.security import (
     InMemoryDevicePairing,
 )
 
-
-NOW = datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
 PAIRING_ID = UUID("10000000-0000-0000-0000-000000000001")
 DEVICE_ID = UUID("20000000-0000-0000-0000-000000000002")
 TOKEN_ID = UUID("30000000-0000-0000-0000-000000000003")
@@ -112,11 +111,14 @@ async def test_pairing_claim_is_correct_one_time_and_rejects_wrong_secret() -> N
         timedelta(minutes=5),
     )
 
-    assert await pairing.claim(
-        challenge.id,
-        "wrong-pairing-secret",
-        "Impostor",
-    ) is None
+    assert (
+        await pairing.claim(
+            challenge.id,
+            "wrong-pairing-secret",
+            "Impostor",
+        )
+        is None
+    )
 
     credential = await pairing.claim(
         challenge.id,
@@ -132,11 +134,14 @@ async def test_pairing_claim_is_correct_one_time_and_rejects_wrong_secret() -> N
     assert await identity.authenticate(credential.token) == credential.device.id
     assert await registry.list_all() == [credential.device]
 
-    assert await pairing.claim(
-        challenge.id,
-        challenge.secret,
-        "Replay attempt",
-    ) is None
+    assert (
+        await pairing.claim(
+            challenge.id,
+            challenge.secret,
+            "Replay attempt",
+        )
+        is None
+    )
     assert await registry.list_all() == [credential.device]
 
 
@@ -150,11 +155,14 @@ async def test_pairing_claim_rejects_a_challenge_at_its_expiry_boundary() -> Non
     )
     clock.current = challenge.expires_at
 
-    assert await pairing.claim(
-        challenge.id,
-        challenge.secret,
-        "Late workstation",
-    ) is None
+    assert (
+        await pairing.claim(
+            challenge.id,
+            challenge.secret,
+            "Late workstation",
+        )
+        is None
+    )
     assert await registry.list_all() == []
 
 
@@ -268,9 +276,7 @@ async def test_cancelled_pairing_claim_rolls_back_issued_identity() -> None:
         frozenset({DeviceCapability.OPEN_APP}),
         timedelta(minutes=5),
     )
-    claim = asyncio.create_task(
-        pairing.claim(challenge.id, challenge.secret, "Workstation")
-    )
+    claim = asyncio.create_task(pairing.claim(challenge.id, challenge.secret, "Workstation"))
     await asyncio.wait_for(registry.add_started.wait(), timeout=0.5)
 
     claim.cancel()

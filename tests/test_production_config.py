@@ -16,8 +16,7 @@ def production_settings(**updates: object) -> Settings:
     values: dict[str, object] = {
         "environment": "production",
         "database_url": (
-            "postgresql+asyncpg://jarvis:"
-            "f3a5f8d7c1e94846a42da7327f5a4b90@postgres:5432/jarvis"
+            "postgresql+asyncpg://jarvis:f3a5f8d7c1e94846a42da7327f5a4b90@postgres:5432/jarvis"
         ),
         "gemini_api_key": "configured-gemini-api-key",
         "owner_token": SecretStr("owner-token-with-at-least-32-bytes"),
@@ -80,9 +79,7 @@ async def test_production_rejects_untrusted_host_headers() -> None:
         ({"gemini_api_key": "replace-me"}, "JARVIS_GEMINI_API_KEY"),
         (
             {
-                "database_url": (
-                    "postgresql+asyncpg://jarvis:jarvis@postgres:5432/jarvis"
-                ),
+                "database_url": ("postgresql+asyncpg://jarvis:jarvis@postgres:5432/jarvis"),
             },
             "JARVIS_DATABASE_URL",
         ),

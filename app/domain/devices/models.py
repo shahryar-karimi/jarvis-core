@@ -44,9 +44,7 @@ class Device:
     granted_capabilities: frozenset[DeviceCapability]
     paired_at: datetime
     status: DeviceStatus = DeviceStatus.OFFLINE
-    advertised_capabilities: frozenset[DeviceCapability] = field(
-        default_factory=frozenset
-    )
+    advertised_capabilities: frozenset[DeviceCapability] = field(default_factory=frozenset)
     last_seen_at: datetime | None = None
     revoked_at: datetime | None = None
 
@@ -101,9 +99,7 @@ class DeviceConnectionState:
             frozenset(self.effective_capabilities),
         )
         if not self.effective_capabilities <= self.advertised_capabilities:
-            raise ValueError(
-                "effective capabilities must be advertised by the device"
-            )
+            raise ValueError("effective capabilities must be advertised by the device")
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,8 +117,7 @@ class DeviceCommand:
         if not action or len(action) > 80:
             raise ValueError("command action must contain 1 to 80 characters")
         if not action[0].isalpha() or any(
-            not (character.isalnum() or character in "_.-")
-            for character in action
+            not (character.isalnum() or character in "_.-") for character in action
         ):
             raise ValueError("command action contains unsupported characters")
         _require_utc(self.issued_at, "issued_at")

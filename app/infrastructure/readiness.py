@@ -16,7 +16,6 @@ from app.application.readiness_service import (
     ReadinessProbe,
 )
 
-
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,9 +33,7 @@ class SqlAlchemyReadinessProbe(ReadinessProbe):
         if timeout_seconds <= 0:
             raise ValueError("Readiness timeout must be positive")
         self._engine = engine
-        self._alembic_config_path = (
-            alembic_config_path or PROJECT_ROOT / "alembic.ini"
-        )
+        self._alembic_config_path = alembic_config_path or PROJECT_ROOT / "alembic.ini"
         self._timeout_seconds = timeout_seconds
 
     async def check(self) -> DatabaseReadiness:
@@ -58,9 +55,7 @@ class SqlAlchemyReadinessProbe(ReadinessProbe):
                 await connection.execute(text("SELECT 1"))
 
                 try:
-                    current_heads = set(
-                        await connection.run_sync(_current_migration_heads)
-                    )
+                    current_heads = set(await connection.run_sync(_current_migration_heads))
                     expected_heads = self._expected_migration_heads()
                 except Exception:
                     logger.error("Unable to inspect database migration state")

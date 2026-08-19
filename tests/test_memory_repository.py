@@ -11,7 +11,6 @@ from app.domain.memory import MemoryCategory, MemoryEntry
 from app.infrastructure.database import Database
 from app.infrastructure.repositories.memory import SqlAlchemyMemoryRepository
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -49,9 +48,7 @@ async def test_repository_round_trip_against_migrated_schema(tmp_path: Path) -> 
             assert created.key == "favorite_editor"
             assert updated.value == "PyCharm"
             assert entries[0].category is MemoryCategory.NOTES
-            assert {
-                (entry.category, entry.key, entry.value) for entry in entries
-            } == {
+            assert {(entry.category, entry.key, entry.value) for entry in entries} == {
                 (
                     MemoryCategory.PREFERENCES,
                     "favorite_editor",
@@ -63,17 +60,23 @@ async def test_repository_round_trip_against_migrated_schema(tmp_path: Path) -> 
                     "This key is isolated by category.",
                 ),
             }
-            assert await repository.delete(
-                MemoryCategory.PREFERENCES,
-                "favorite_editor",
-            ) is True
+            assert (
+                await repository.delete(
+                    MemoryCategory.PREFERENCES,
+                    "favorite_editor",
+                )
+                is True
+            )
 
         async with database.session_factory() as session:
             repository = SqlAlchemyMemoryRepository(session)
-            assert await repository.delete(
-                MemoryCategory.PREFERENCES,
-                "favorite_editor",
-            ) is False
+            assert (
+                await repository.delete(
+                    MemoryCategory.PREFERENCES,
+                    "favorite_editor",
+                )
+                is False
+            )
             remaining = await repository.list_all()
             assert [entry.category for entry in remaining] == [MemoryCategory.NOTES]
     finally:
@@ -128,11 +131,7 @@ async def test_concurrent_upserts_keep_one_row_per_category_and_key(
             *(write(value) for value in values),
             return_exceptions=True,
         )
-        failures = [
-            outcome
-            for outcome in outcomes
-            if isinstance(outcome, BaseException)
-        ]
+        failures = [outcome for outcome in outcomes if isinstance(outcome, BaseException)]
         assert failures == []
         assert len(session_ids) == len(values)
         results = [cast(MemoryEntry, outcome) for outcome in outcomes]
@@ -145,8 +144,7 @@ async def test_concurrent_upserts_keep_one_row_per_category_and_key(
         ]
         assert len(memory_statements) == len(values)
         assert all(
-            statement.lstrip().startswith("INSERT")
-            and "ON CONFLICT" in statement
+            statement.lstrip().startswith("INSERT") and "ON CONFLICT" in statement
             for statement in memory_statements
         )
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,7 +12,7 @@ def memory_entry() -> MemoryEntry:
         category=MemoryCategory.PREFERENCES,
         key="favorite_editor",
         value="PyCharm",
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -25,11 +25,14 @@ async def test_memory_service_delegates_reads_and_writes() -> None:
     service = MemoryService(repository)
 
     assert await service.list_memories() == [entry]
-    assert await service.upsert_memory(
-        MemoryCategory.PREFERENCES,
-        "favorite_editor",
-        "PyCharm",
-    ) is entry
+    assert (
+        await service.upsert_memory(
+            MemoryCategory.PREFERENCES,
+            "favorite_editor",
+            "PyCharm",
+        )
+        is entry
+    )
 
     repository.list_all.assert_awaited_once_with()
     repository.upsert.assert_awaited_once_with(
@@ -70,9 +73,7 @@ async def test_memory_service_reports_a_missing_memory() -> None:
 
     assert captured.value.category is MemoryCategory.PREFERENCES
     assert captured.value.key == "favorite_editor"
-    assert str(captured.value) == (
-        "Memory 'preferences/favorite_editor' was not found."
-    )
+    assert str(captured.value) == ("Memory 'preferences/favorite_editor' was not found.")
 
 
 @pytest.mark.asyncio

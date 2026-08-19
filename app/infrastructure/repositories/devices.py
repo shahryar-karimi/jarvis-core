@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import (
@@ -27,7 +27,6 @@ from app.domain.devices import (
     DeviceStatus,
 )
 from app.infrastructure.database import Base
-
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -87,9 +86,7 @@ class SqlAlchemyDeviceRegistry(DeviceRegistry):
                 async with session.begin():
                     session.add(record)
         except IntegrityError as error:
-            raise ValueError(
-                f"Device '{device.id}' is already registered."
-            ) from error
+            raise ValueError(f"Device '{device.id}' is already registered.") from error
 
     async def get(self, device_id: UUID) -> Device | None:
         async with self._session_factory() as session:
@@ -107,11 +104,7 @@ class SqlAlchemyDeviceRegistry(DeviceRegistry):
 
     async def save(self, device: Device) -> None:
         values = self.durable_values(device)
-        statement = (
-            update(DeviceRecord)
-            .where(DeviceRecord.id == device.id)
-            .values(**values)
-        )
+        statement = update(DeviceRecord).where(DeviceRecord.id == device.id).values(**values)
         async with self._session_factory() as session:
             async with session.begin():
                 result = await session.execute(statement)
@@ -147,15 +140,10 @@ class SqlAlchemyDeviceRegistry(DeviceRegistry):
             id=record.id,
             name=record.name,
             granted_capabilities=frozenset(
-                DeviceCapability(value)
-                for value in record.granted_capabilities
+                DeviceCapability(value) for value in record.granted_capabilities
             ),
             paired_at=_as_utc(record.paired_at),
-            status=(
-                DeviceStatus.REVOKED
-                if revoked_at is not None
-                else DeviceStatus.OFFLINE
-            ),
+            status=(DeviceStatus.REVOKED if revoked_at is not None else DeviceStatus.OFFLINE),
             revoked_at=revoked_at,
         )
 
@@ -164,5 +152,5 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None or value.utcoffset() is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

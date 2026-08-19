@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import hmac
 import secrets
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, select
@@ -29,7 +29,6 @@ from app.infrastructure.security.credentials import (
     IssuedDeviceCredential,
 )
 
-
 Clock = Callable[[], datetime]
 IdFactory = Callable[[], UUID]
 TokenFactory = Callable[[], str]
@@ -48,7 +47,7 @@ class SqlAlchemyDeviceIdentity(DeviceIdentity):
     ) -> None:
         self._session_factory = session_factory
         self._codec = codec
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def issue(self, device_id: UUID) -> str:
         issued = self.prepare()
@@ -56,17 +55,12 @@ class SqlAlchemyDeviceIdentity(DeviceIdentity):
         async with self._session_factory() as session:
             dialect_name = session.get_bind().dialect.name
             if dialect_name == "postgresql":
-                insert_statement = postgresql_insert(
-                    DeviceCredentialRecord
-                ).values(**values)
+                insert_statement = postgresql_insert(DeviceCredentialRecord).values(**values)
             elif dialect_name == "sqlite":
-                insert_statement = sqlite_insert(DeviceCredentialRecord).values(
-                    **values
-                )
+                insert_statement = sqlite_insert(DeviceCredentialRecord).values(**values)
             else:
                 raise RuntimeError(
-                    "Atomic device credential rotation is not implemented for "
-                    f"'{dialect_name}'."
+                    f"Atomic device credential rotation is not implemented for '{dialect_name}'."
                 )
 
             statement = insert_statement.on_conflict_do_update(
@@ -85,9 +79,7 @@ class SqlAlchemyDeviceIdentity(DeviceIdentity):
         credential_id = self._codec.parse_token_id(token)
         if credential_id is None:
             return None
-        statement = select(DeviceCredentialRecord).where(
-            DeviceCredentialRecord.id == credential_id
-        )
+        statement = select(DeviceCredentialRecord).where(DeviceCredentialRecord.id == credential_id)
         async with self._session_factory() as session:
             record = await session.scalar(statement)
         if record is None or not self._codec.matches(token, record.token_digest):
@@ -125,9 +117,7 @@ class SqlAlchemyDeviceIdentity(DeviceIdentity):
         issued: IssuedDeviceCredential,
         created_at: datetime,
     ) -> DeviceCredentialRecord:
-        return DeviceCredentialRecord(
-            **cls.record_values(device_id, issued, created_at)
-        )
+        return DeviceCredentialRecord(**cls.record_values(device_id, issued, created_at))
 
     def _now(self) -> datetime:
         value = self._clock()
@@ -164,7 +154,7 @@ class SqlAlchemyDevicePairing(DevicePairing):
             raise ValueError("pairing digest key must contain at least 32 bytes")
         self._session_factory = session_factory
         self._identities = identities
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._digest_key = pairing_digest_key or secrets.token_bytes(32)
         self._id_factory = id_factory
         self._token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
@@ -236,9 +226,7 @@ class SqlAlchemyDevicePairing(DevicePairing):
             # needed and no partial registration can escape this transaction.
             async with self._session_factory() as session:
                 async with session.begin():
-                    device_record = (
-                        SqlAlchemyDeviceRegistry.record_from_domain(device)
-                    )
+                    device_record = SqlAlchemyDeviceRegistry.record_from_domain(device)
                     session.add(device_record)
                     # The mappers intentionally have no ORM relationship, so
                     # make the FK ordering explicit. This remains one atomic

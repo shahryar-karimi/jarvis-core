@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.application.prompt_builder import PromptBuilder
@@ -6,7 +6,9 @@ from app.core.config import Settings
 from app.domain.memory import MemoryCategory, MemoryEntry
 
 
-def test_prompt_builder_includes_identity_memory_and_base_prompt(tmp_path: Path) -> None:
+def test_prompt_builder_includes_identity_memory_and_base_prompt(
+    tmp_path: Path,
+) -> None:
     prompt = tmp_path / "base.txt"
     prompt.write_text("BASE RULES", encoding="utf-8")
     settings = Settings(
@@ -21,11 +23,11 @@ def test_prompt_builder_includes_identity_memory_and_base_prompt(tmp_path: Path)
             category=MemoryCategory.PREFERENCES,
             key="backend_language",
             value="Python",
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
         )
     ]
 
-    result = builder.build(memories, datetime(2026, 8, 18, 12, tzinfo=timezone.utc))
+    result = builder.build(memories, datetime(2026, 8, 18, 12, tzinfo=UTC))
 
     assert "Your name is JARVIS" in result
     assert "Backend Language: Python" in result

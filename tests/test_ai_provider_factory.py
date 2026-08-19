@@ -29,9 +29,7 @@ def test_provider_factory_normalizes_name_and_passes_configuration(
 
     monkeypatch.setattr(factory, "GeminiProvider", fake_gemini)
 
-    provider = factory.create_ai_provider(
-        provider_settings(ai_provider="  GeMiNi  ")
-    )
+    provider = factory.create_ai_provider(provider_settings(ai_provider="  GeMiNi  "))
 
     assert provider.name == "gemini"
     assert created_with == [("test-key", "gemini-test")]

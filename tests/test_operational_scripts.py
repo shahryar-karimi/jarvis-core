@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKUP_SCRIPT = PROJECT_ROOT / "scripts" / "backup_postgres.sh"
@@ -67,9 +66,7 @@ def test_restore_keeps_destructive_safeguards_before_database_drop() -> None:
     assert script.index("pg_restore --list") < drop_database
     assert script.index("backup_postgres.sh") < drop_database
     assert script.index("postgres|template0|template1") < drop_database
-    assert script.index(
-        '"$JARVIS_DB_USER" = "$POSTGRES_ADMIN_USER"'
-    ) < drop_database
+    assert script.index('"$JARVIS_DB_USER" = "$POSTGRES_ADMIN_USER"') < drop_database
     assert script.index("trap finish EXIT") < drop_database
     assert "JARVIS Core was left stopped for safety" in script
 

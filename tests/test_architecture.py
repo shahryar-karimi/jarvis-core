@@ -1,7 +1,6 @@
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -28,8 +27,7 @@ def test_memory_routes_do_not_import_infrastructure() -> None:
     assert not {
         module
         for module in modules
-        if module == "app.infrastructure"
-        or module.startswith("app.infrastructure.")
+        if module == "app.infrastructure" or module.startswith("app.infrastructure.")
     }
 
 

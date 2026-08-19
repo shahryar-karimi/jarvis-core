@@ -27,7 +27,6 @@ from sqlalchemy import (
 from app.core.config import get_settings
 from app.infrastructure.database import Database
 
-
 BASELINE_REVISION = "0001_create_memories"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_METADATA = MetaData()
@@ -56,9 +55,7 @@ async def adopt_baseline(database_url: str | None = None) -> None:
     try:
         async with database.engine.connect() as connection:
             table_names = await connection.run_sync(
-                lambda sync_connection: set(
-                    inspect(sync_connection).get_table_names()
-                )
+                lambda sync_connection: set(inspect(sync_connection).get_table_names())
             )
             if "alembic_version" in table_names:
                 raise BaselineAdoptionError(
@@ -67,8 +64,7 @@ async def adopt_baseline(database_url: str | None = None) -> None:
                 )
             if "memories" not in table_names:
                 raise BaselineAdoptionError(
-                    "The memories table is absent; use "
-                    "'python -m alembic upgrade head' instead."
+                    "The memories table is absent; use 'python -m alembic upgrade head' instead."
                 )
 
             def schema_differences(sync_connection):

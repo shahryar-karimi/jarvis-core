@@ -19,7 +19,6 @@ from pydantic import (
 
 from app.domain.devices import DeviceCapability
 
-
 PROTOCOL_VERSION = 1
 DEVICE_SUBPROTOCOL = "jarvis-device.v1"
 DEVICE_HELLO_TIMEOUT_SECONDS = 10.0
@@ -145,10 +144,7 @@ class CommandResultMessage(StrictMessage):
 
 
 DeviceInboundMessage = Annotated[
-    DeviceHelloMessage
-    | HeartbeatPongMessage
-    | CapabilitiesUpdateMessage
-    | CommandResultMessage,
+    DeviceHelloMessage | HeartbeatPongMessage | CapabilitiesUpdateMessage | CommandResultMessage,
     Field(discriminator="type"),
 ]
 device_message_adapter = TypeAdapter(DeviceInboundMessage)
@@ -207,9 +203,7 @@ class CommandExecutePayload(StrictMessage):
 
     @model_validator(mode="after")
     def validate_deadline(self) -> CommandExecutePayload:
-        if _parse_wire_timestamp(self.deadline_at) <= _parse_wire_timestamp(
-            self.issued_at
-        ):
+        if _parse_wire_timestamp(self.deadline_at) <= _parse_wire_timestamp(self.issued_at):
             raise ValueError("command deadline must be after its issue time")
         return self
 

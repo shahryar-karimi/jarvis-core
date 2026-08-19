@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
+import pytest
 from alembic import command
 from alembic.config import Config
-import pytest
 from sqlalchemy import event, func, select
 from sqlalchemy.exc import IntegrityError
 
@@ -30,9 +30,8 @@ from app.infrastructure.security import (
     SqlAlchemyDevicePairing,
 )
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-NOW = datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
 PAIRING_ID = UUID("10000000-0000-0000-0000-000000000001")
 DEVICE_ID = UUID("20000000-0000-0000-0000-000000000002")
 EXISTING_DEVICE_ID = UUID("30000000-0000-0000-0000-000000000003")
@@ -78,9 +77,7 @@ def device(
     return Device(
         id=device_id,
         name=name,
-        granted_capabilities=frozenset(
-            {DeviceCapability.OPEN_APP, DeviceCapability.SYSTEM}
-        ),
+        granted_capabilities=frozenset({DeviceCapability.OPEN_APP, DeviceCapability.SYSTEM}),
         paired_at=NOW,
     )
 
@@ -168,16 +165,17 @@ async def test_pairing_persists_only_a_digest_and_survives_resource_restart(
 
         assert credential is not None
         assert credential.device.id == DEVICE_ID
-        assert await pairing.claim(
-            challenge.id,
-            challenge.secret,
-            "Replay",
-        ) is None
+        assert (
+            await pairing.claim(
+                challenge.id,
+                challenge.secret,
+                "Replay",
+            )
+            is None
+        )
 
         async with database.session_factory() as session:
-            stored = (
-                await session.scalars(select(DeviceCredentialRecord))
-            ).one()
+            stored = (await session.scalars(select(DeviceCredentialRecord))).one()
         assert stored.id == CREDENTIAL_ID
         assert len(stored.token_digest) == 32
         assert credential.token.encode("utf-8") != stored.token_digest
@@ -190,9 +188,7 @@ async def test_pairing_persists_only_a_digest_and_survives_resource_restart(
         )
         restarted_registry = SqlAlchemyDeviceRegistry(database.session_factory)
         assert await restarted_identity.authenticate(credential.token) == DEVICE_ID
-        assert await restarted_identity.authenticate(
-            f"{credential.token}tampered"
-        ) is None
+        assert await restarted_identity.authenticate(f"{credential.token}tampered") is None
         assert await restarted_registry.get(DEVICE_ID) == credential.device
 
         rotating_identity = SqlAlchemyDeviceIdentity(
@@ -266,9 +262,7 @@ async def test_pairing_database_failure_rolls_back_both_rows_and_keeps_challenge
         assert challenge.id in pairing._pairings
         assert await registry.get(DEVICE_ID) is None
         async with database.session_factory() as session:
-            device_count = await session.scalar(
-                select(func.count()).select_from(DeviceRecord)
-            )
+            device_count = await session.scalar(select(func.count()).select_from(DeviceRecord))
             credential_count = await session.scalar(
                 select(func.count()).select_from(DeviceCredentialRecord)
             )
