@@ -1,5 +1,7 @@
 # JARVIS Core
 
+[![CI](https://github.com/shahryar-karimi/jarvis-core/actions/workflows/ci.yml/badge.svg)](https://github.com/shahryar-karimi/jarvis-core/actions/workflows/ci.yml)
+
 JARVIS Core is the primary backend and orchestration service for JARVIS. It
 provides the cloud-side AI, memory, prompt construction, and HTTP interfaces
 used by JARVIS clients and device agents.
@@ -293,6 +295,34 @@ intentionally process-local and reset when Core restarts; a persisted device
 then appears offline until its Agent reconnects. Run a single Core worker until
 a shared message broker and presence store exist, because multiple workers
 cannot route a command to another process's WebSocket.
+
+## Lint and format
+
+Ruff enforces linting and formatting; both run in CI and must pass before
+merge:
+
+```powershell
+ruff check .
+ruff format --check .
+```
+
+Fix issues automatically before committing:
+
+```powershell
+ruff check --fix .
+ruff format .
+```
+
+## Continuous integration
+
+Every pull request and push to `master` runs `.github/workflows/ci.yml`:
+lint/format, the full non-live test suite (including the PostgreSQL
+integration tests, against a disposable service container) with a database
+migration check, and a Docker build validation. Pushing a `vX.Y.Z` tag runs
+`.github/workflows/release.yml`, which builds and publishes an immutable
+image to GHCR (`ghcr.io/shahryar-karimi/jarvis-core`) for that release. This
+does not deploy anything; the [deployment runbook](docs/deployment.md) stays a
+deliberate, manual process.
 
 ## Tests
 
